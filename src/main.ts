@@ -34,7 +34,7 @@ app.innerHTML = `
   </header>
   <div id="board-area">
     <div class="sun"></div>
-    <div id="board-wrap">
+    <div id="board-wrap" class="idle">
       <div id="phaseflag"></div>
       <canvas id="board" width="96" height="96"></canvas>
     </div>
@@ -131,6 +131,7 @@ function beginFight() {
   frozenTelegraphs = null;
   canvas.width = fight.w * TILE;
   canvas.height = fight.h * TILE;
+  document.querySelector('#board-wrap')!.classList.remove('idle');
   requestAnimationFrame(sizeCanvas);
   hintEl.textContent = DEFAULT_HINT;
   refreshHud();
@@ -261,10 +262,13 @@ function rosterButton(name: string, kind: Kind, pieceId: number, disabled: boole
   const label = document.createElement('span');
   label.className = 'rb-name';
   label.textContent = badge ? `${name} ${badge}` : name;
-  const sub = document.createElement('span');
-  sub.className = 'rb-kind';
-  sub.textContent = KIND_INFO[kind].title;
-  b.append(label, sub);
+  b.append(label);
+  if (KIND_INFO[kind].title !== name) {
+    const sub = document.createElement('span');
+    sub.className = 'rb-kind';
+    sub.textContent = KIND_INFO[kind].title;
+    b.append(sub);
+  }
   b.onclick = () => selectPiece(pieceId);
   return b;
 }

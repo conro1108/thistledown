@@ -2,7 +2,7 @@
 // (and to the app shell if a page was never visited). Bump CACHE on releases
 // that must invalidate old assets — there's no hashed-asset precache list
 // here on purpose, this is a prototype-grade cache, not a build pipeline.
-const CACHE = 'thistledown-v1';
+const CACHE = 'thistledown-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 

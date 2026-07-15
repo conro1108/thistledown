@@ -122,6 +122,7 @@ body {
 }
 
 #board-wrap { position: relative; line-height: 0; z-index: 1; }
+#board-wrap.idle { visibility: hidden; }
 
 canvas {
   image-rendering: pixelated;
@@ -227,6 +228,9 @@ canvas {
 #overlay {
   position: fixed;
   inset: 0;
+  /* must beat #board-wrap's z-index or the canvas paints over the card and
+     eats the taps meant for its buttons (the "stuck after winning" bug) */
+  z-index: 100;
   background: rgba(20, 16, 28, 0.86);
   display: flex;
   align-items: center;
