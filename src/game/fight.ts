@@ -34,6 +34,7 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     status: 'playing',
     rng,
     events: [],
+    pendingPromotion: null,
   };
   assignTelegraphs(s);
   return s;
@@ -52,7 +53,7 @@ export function keeper(s: FightState): Piece | undefined {
  * Returns false if the move was illegal (state untouched).
  */
 export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
-  if (s.status !== 'playing') return false;
+  if (s.status !== 'playing' || s.pendingPromotion != null) return false;
   const p = s.pieces.find((q) => q.id === pieceId);
   if (!p || p.side !== 'friend') return false;
   if (!movesFor(s, p).some((m) => m.x === to.x && m.y === to.y)) return false;
@@ -71,12 +72,33 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
     return true;
   }
 
-  resolveTelegraphs(s);
-  if (s.status !== 'playing') return true;
+  if (p.kind === 'sprout' && p.y === 0) {
+    s.pendingPromotion = p.id;
+    return true; // enemies hold their breath until promote() is called
+  }
 
+  finishTurn(s);
+  return true;
+}
+
+export type PromotionKind = 'hopper' | 'slink' | 'rumble' | 'duchess';
+
+/** Evolve the pending sprout, then let the enemy turn play out. */
+export function promote(s: FightState, kind: PromotionKind): boolean {
+  if (s.pendingPromotion == null) return false;
+  const p = s.pieces.find((q) => q.id === s.pendingPromotion);
+  s.pendingPromotion = null;
+  if (!p) return false;
+  p.kind = kind;
+  finishTurn(s);
+  return true;
+}
+
+function finishTurn(s: FightState) {
+  resolveTelegraphs(s);
+  if (s.status !== 'playing') return;
   s.turn++;
   assignTelegraphs(s);
-  return true;
 }
 
 /**

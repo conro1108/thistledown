@@ -1,6 +1,6 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
-import { createFight, playerMove } from './game/fight';
+import { createFight, playerMove, promote, type PromotionKind } from './game/fight';
 import {
   afterFightWon,
   buildFightConfig,
@@ -116,10 +116,14 @@ function endOfFight() {
     return;
   }
 
-  // settle roster: who survived the fight?
+  // settle roster: who survived (and keep any mid-fight evolutions)
   const alive = new Set<number>();
   lineup.forEach((compIdx, j) => {
-    if (fight!.pieces.some((p) => p.id === 2 + j && p.side === 'friend')) alive.add(compIdx);
+    const piece = fight!.pieces.find((p) => p.id === 2 + j && p.side === 'friend');
+    if (piece) {
+      alive.add(compIdx);
+      run!.companions[compIdx].kind = piece.kind;
+    }
   });
   const shakenNames = lineup
     .filter((i) => !alive.has(i))
@@ -162,6 +166,24 @@ function endOfFight() {
       })),
       { label: 'Travel light', sub: 'No new friends this time.', fn: fightIntro },
     ],
+  );
+}
+
+function promotionChoice() {
+  const options: PromotionKind[] = ['hopper', 'slink', 'rumble'];
+  showOverlay(
+    'Something blossoms ✨',
+    'Crossing the whole meadow changes a critter. Who do they become?',
+    options.map((kind) => ({
+      label: KIND_INFO[kind].title,
+      sub: KIND_INFO[kind].blurb,
+      fn: () => {
+        promote(fight!, kind);
+        drainEvents();
+        refreshHud();
+        if (fight!.status !== 'playing') setTimeout(endOfFight, 650);
+      },
+    })),
   );
 }
 
@@ -208,6 +230,10 @@ canvas.addEventListener('click', (ev) => {
       selected = null;
       drainEvents();
       refreshHud();
+      if (fight.pendingPromotion != null) {
+        promotionChoice();
+        return;
+      }
       if (fight.status !== 'playing') setTimeout(endOfFight, 650);
       return;
     }

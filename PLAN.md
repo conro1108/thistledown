@@ -11,24 +11,25 @@ priority. Don't overspec ahead of what's built.
   `src/main.ts` wires.
 - Deploy: static `dist/` via `npm run build`, Vercel with the Vite preset — no config.
 
-## P0 — Core e2e (a playable fight in the browser)
+## P0 — Core e2e (a playable fight in the browser) — DONE
 
-- [ ] Scaffold: Vite + TS + Vitest, index.html, styles
-- [ ] Engine: movement + threat generation for all 11 kinds (tests)
-- [ ] Fight loop: telegraph → player move → resolve → re-telegraph; win/lose (tests)
-- [ ] Renderer: tiles, pixel sprites, move highlights, telegraphs, hover threat overlay
-- [ ] Input + HUD: select/move, hint text, win/lose overlays
+- [x] Scaffold: Vite + TS + Vitest, index.html, styles
+- [x] Engine: movement + threat generation for all 11 kinds (tests)
+- [x] Fight loop: telegraph → player move → resolve → re-telegraph; win/lose (tests)
+- [x] Renderer: tiles, pixel sprites, move highlights, telegraphs, hover threat overlay
+- [x] Input + HUD: select/move, hint text, win/lose overlays
 
-## P1 — The run
+## P1 — The run — DONE
 
-- [ ] Fight ladder: 6 escalating fights (board size, enemy kinds, acts-per-turn)
-- [ ] Recruit choice between fights (the movement blurb IS the teaching moment)
-- [ ] Shaken: captured friends sit out the next fight, then recover
-- [ ] Run win/lose flow
+- [x] Fight ladder: 6 escalating fights (board size, enemy kinds, acts-per-turn)
+- [x] Recruit choice between fights (the movement blurb IS the teaching moment)
+- [x] Shaken: captured friends sit out the next fight, then recover
+- [x] Run win/lose flow
 
 ## P2 — Next up, in rough priority
 
-- [ ] Promotion: a sprout reaching the far edge evolves mid-fight
+- [x] Promotion: a sprout reaching the far edge evolves mid-fight (choice of
+      hopper/slink/rumble; the evolution sticks to that companion for the run)
 - [ ] Camp: heal shaken early, snacks (small permanent buffs)
 - [ ] First trinkets (3–5, run-defining passives)
 - [ ] Region-2/3 boss with the cornering (no-safe-square) rule

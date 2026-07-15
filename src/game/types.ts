@@ -53,4 +53,6 @@ export interface FightState {
   rng: Rng;
   /** transient, drained by the renderer each frame */
   events: FightEvent[];
+  /** a sprout reached the far edge — the turn is frozen until promote() is called */
+  pendingPromotion: number | null;
 }

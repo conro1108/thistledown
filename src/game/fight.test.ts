@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFight, playerMove, type Spawn } from './fight';
+import { createFight, playerMove, promote, type Spawn } from './fight';
 import { mulberry32 } from './rng';
 import type { FightState } from './types';
 
@@ -72,6 +72,22 @@ describe('fight loop', () => {
     expect(thistle.x).toBe(2);
     expect(thistle.y).toBe(2); // it stayed put
     expect(s.pieces.find((p) => p.kind === 'sprout')).toBeDefined();
+  });
+
+  it('a sprout reaching the far edge freezes the turn until promotion', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 2, y: 1 }],
+      [{ kind: 'thistle', x: 5, y: 4 }],
+    );
+    const sproutId = idAt(s, 2, 1);
+    playerMove(s, sproutId, { x: 2, y: 0 });
+    expect(s.pendingPromotion).toBe(sproutId);
+    expect(s.turn).toBe(1); // enemy turn has not resolved
+    expect(playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 })).toBe(false); // input locked
+    expect(promote(s, 'rumble')).toBe(true);
+    expect(s.pieces.find((p) => p.id === sproutId)!.kind).toBe('rumble');
+    expect(s.turn).toBe(2); // enemy turn resolved after the choice
+    expect(s.pendingPromotion).toBeNull();
   });
 
   it('capturing a telegraphed enemy cancels its telegraph', () => {
