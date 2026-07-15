@@ -1,4 +1,4 @@
-# Thistledown 🌼
+# Overgrown 🌼
 
 A cozy pixel-art tactics roguelike. Lead a band of meadow critters against the
 Bramble — every friend moves in a pattern you might just recognize, but nobody

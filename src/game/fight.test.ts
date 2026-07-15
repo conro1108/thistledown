@@ -76,6 +76,20 @@ describe('fight loop', () => {
     expect(thistle.x).toBe(2);
     expect(thistle.y).toBe(2); // it stayed put
     expect(s.pieces.find((p) => p.kind === 'sprout')).toBeDefined();
+    // the game keeps going — and tells the player their block worked
+    expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'thistle')).toBe(true);
+    expect(s.turn).toBe(2);
+    expect(s.telegraphs.length).toBeGreaterThan(0);
+  });
+
+  it('a hopper can capture a golem sitting on the back rank', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 2, y: 2 }],
+      [{ kind: 'golem', x: 3, y: 0 }, { kind: 'thistle', x: 5, y: 3 }],
+    );
+    expect(playerMove(s, idAt(s, 2, 2), { x: 3, y: 0 })).toBe(true);
+    expect(s.pieces.find((p) => p.kind === 'golem')).toBeUndefined();
+    expect(s.status).toBe('playing'); // thistle still up
   });
 
   it('a sprout reaching the far edge freezes the turn until promotion', () => {

@@ -1,6 +1,6 @@
-# Thistledown — Design Doc
+# Overgrown — Design Doc
 
-Named for the first enemy you meet and the soft thing it turns into when you win.
+Named for the state of the meadow you're reclaiming, fight by fight.
 Deliberately zero chess in the name — the con only works if the box doesn't say chess.
 
 ## The pitch

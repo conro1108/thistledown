@@ -53,10 +53,15 @@ body {
 #turn { color: var(--dim); font-size: 12px; white-space: nowrap; }
 
 #goal {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--ink);
-  opacity: 0.85;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: bold;
+  color: var(--accent);
+  background: rgba(255, 209, 102, 0.08);
+  border: 1px solid rgba(255, 209, 102, 0.25);
+  border-radius: 6px;
+  padding: 3px 8px;
+  min-height: 1.6em;
 }
 
 #legend {
@@ -75,7 +80,9 @@ body {
 /* ---------- board ---------- */
 
 #board-area {
-  flex: 1 1 auto;
+  /* basis 0: the board must never influence its own available space, or the
+     integer-rescale loop oscillates (the "board keeps zooming" bug) */
+  flex: 1 1 0;
   min-height: 0;
   position: relative;
   display: flex;
@@ -153,7 +160,10 @@ canvas {
 
 #hint {
   flex-shrink: 0;
-  min-height: 2.6em;
+  /* fixed height: hint text changing lines must not resize the board area
+     above it (that re-triggers the integer rescale and reads as zooming) */
+  height: 3.2em;
+  overflow: hidden;
   color: var(--ink);
   font-size: 12.5px;
   line-height: 1.4;
@@ -252,6 +262,26 @@ canvas {
 }
 .card h2 { margin: 0 0 10px; color: var(--accent); }
 .card p { color: var(--ink); line-height: 1.5; }
+.card .objective {
+  display: block;
+  margin-top: 10px;
+  color: var(--accent);
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.petal {
+  position: absolute;
+  top: -32px;
+  font-size: 20px;
+  pointer-events: none;
+  animation: petal-fall 4s linear infinite;
+}
+@keyframes petal-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(300deg); opacity: 0.8; }
+}
 .card .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 
 button {

@@ -6,7 +6,7 @@ export const TILE = 16;
 
 export interface FX {
   at: Vec;
-  kind: 'poof' | 'shaken';
+  kind: 'poof' | 'shaken' | 'bonk';
   t: number; // frames elapsed
 }
 
@@ -52,15 +52,20 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     }
   }
 
-  // enemy telegraphs: dotted path + marked target square
+  // enemy telegraphs: arrow + marked target square
   const telegraphs = v.telegraphOverride ?? s.telegraphs;
   for (const t of telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
-    if (!e || !t.to) continue;
+    if (!e) continue;
+    if (!t.to) {
+      // nowhere to go — snoozing, not broken
+      sleepGlyph(ctx, e.x, e.y);
+      continue;
+    }
     const targetsFriend = pieceAt(s, t.to.x, t.to.y)?.side === 'friend';
     const col = targetsFriend ? '#e05252' : '#7a5fae';
     const from = v.posOverrides?.get(e.id) ?? e;
-    dottedPath(ctx, from, t.to, col);
+    arrow(ctx, from, t.to, col);
     corners(ctx, t.to.x, t.to.y, col);
   }
 
@@ -93,16 +98,27 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
   // pieces, with a 1px integer idle bob (never fractional — pixel grid is sacred)
   for (const p of s.pieces) {
     const pos = v.posOverrides?.get(p.id) ?? p;
+    const px = Math.round(pos.x * TILE);
+    const py = Math.round(pos.y * TILE);
+    // team plate under the feet: warm for friends, dusky for the bramble
+    ctx.fillStyle = p.side === 'friend' ? '#f2e2a0' : '#55437a';
+    ctx.fillRect(px + 2, py + 14, 12, 1);
+    ctx.fillRect(px + 3, py + 15, 10, 1);
     const bob = (Math.floor(time / 450) + p.id) % 2 === 0 ? 0 : -1;
-    drawSprite(ctx, p.kind, Math.round(pos.x * TILE) + 2, Math.round(pos.y * TILE) + 2 + bob);
+    drawSprite(ctx, p.kind, px + 2, py + 2 + bob);
   }
 
-  // capture / shaken effects
+  // capture / shaken / blocked effects
   for (const f of v.fx) {
     const cx = f.at.x * TILE + 8;
     const cy = f.at.y * TILE + 8;
     const r = 1 + Math.floor(f.t / 4);
-    const cols = f.kind === 'poof' ? ['#f0b0c0', '#f2f0e4', '#ffd966'] : ['#b8c4d8', '#8a94a8'];
+    const cols =
+      f.kind === 'poof'
+        ? ['#f0b0c0', '#f2f0e4', '#ffd966']
+        : f.kind === 'bonk'
+          ? ['#ffd966', '#f2f0e4']
+          : ['#b8c4d8', '#8a94a8'];
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
       const px = cx + Math.round(Math.cos(a) * r);
@@ -129,18 +145,42 @@ function corners(ctx: CanvasRenderingContext2D, x: number, y: number, col: strin
   }
 }
 
-function dottedPath(ctx: CanvasRenderingContext2D, from: Vec, to: Vec, col: string) {
+/** Chunky pixel arrow from one cell's center toward another's. */
+function arrow(ctx: CanvasRenderingContext2D, from: Vec, to: Vec, col: string) {
   const ax = from.x * TILE + 8;
   const ay = from.y * TILE + 8;
   const bx = to.x * TILE + 8;
   const by = to.y * TILE + 8;
   const dist = Math.hypot(bx - ax, by - ay);
-  const n = Math.max(2, Math.floor(dist / 4));
+  if (dist < 1) return;
+  const ux = (bx - ax) / dist;
+  const uy = (by - ay) / dist;
+  // stop the tip short of the target's center so the head isn't hidden
+  // under whatever is standing there
+  const tipD = dist - 6;
   ctx.fillStyle = col;
-  for (let i = 1; i < n; i++) {
-    if (i % 2 === 0) continue;
-    const px = Math.round(ax + ((bx - ax) * i) / n);
-    const py = Math.round(ay + ((by - ay) * i) / n);
-    ctx.fillRect(px, py, 1, 1);
+  for (let d = 6; d < tipD - 4; d += 4) {
+    ctx.fillRect(Math.round(ax + ux * d) - 1, Math.round(ay + uy * d) - 1, 2, 2);
   }
+  const phx = -uy;
+  const phy = ux;
+  for (let i = 0; i < 4; i++) {
+    const cx = ax + ux * (tipD - i * 1.3);
+    const cy = ay + uy * (tipD - i * 1.3);
+    const half = i * 0.9;
+    for (let j = -2; j <= 2; j++) {
+      const off = (half * j) / 2;
+      ctx.fillRect(Math.round(cx + phx * off), Math.round(cy + phy * off), 1, 1);
+    }
+  }
+}
+
+/** Tiny "z" over an enemy that has no legal move this round. */
+function sleepGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const px = x * TILE + 11;
+  const py = y * TILE + 1;
+  ctx.fillStyle = '#efe9f7';
+  ctx.fillRect(px, py, 3, 1);
+  ctx.fillRect(px + 1, py + 1, 1, 1);
+  ctx.fillRect(px, py + 2, 3, 1);
 }

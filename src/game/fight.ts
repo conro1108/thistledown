@@ -116,7 +116,10 @@ function resolveTelegraphs(s: FightState) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e || !t.to) continue;
     const to = t.to;
-    if (!movesFor(s, e).some((m) => m.x === to.x && m.y === to.y)) continue;
+    if (!movesFor(s, e).some((m) => m.x === to.x && m.y === to.y)) {
+      s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
+      continue;
+    }
     const occ = pieceAt(s, to.x, to.y);
     if (occ && occ.side === 'friend') {
       s.pieces = s.pieces.filter((p) => p.id !== occ.id);

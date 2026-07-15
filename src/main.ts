@@ -1,6 +1,6 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
-import { createFight, playerMove, promote, resolveEnemyTurn, type PromotionKind } from './game/fight';
+import { createFight, enemies, playerMove, promote, resolveEnemyTurn, type PromotionKind } from './game/fight';
 import {
   afterFightWon,
   buildFightConfig,
@@ -16,20 +16,21 @@ import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
 
-const GOAL_TEXT = 'Goal: capture every last bramble creature in the clearing.';
+const OBJECTIVE = 'Catch every bramble creature to win the clearing.';
 const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing square to move them.';
-const PAUSE_MS = 500; // beat after your move, before the bramble acts
-const TWEEN_MS = 280; // how long their slide/leap takes to draw
+const PAUSE_MS = 340; // beat after your move, before the bramble acts
+const TWEEN_MS = 190; // how long their slide/leap takes to draw
+const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
-    <div id="hud-row"><span id="fightname">Thistledown</span><span id="turn"></span></div>
-    <div id="goal">${GOAL_TEXT}</div>
+    <div id="hud-row"><span id="fightname">Overgrown</span><span id="turn"></span></div>
+    <div id="goal"></div>
     <div id="legend">
-      <span><i class="sw go"></i>you can go</span>
-      <span><i class="sw move"></i>they'll go</span>
-      <span><i class="sw hit"></i>they'll strike!</span>
+      <span><i class="sw go"></i>your moves</span>
+      <span><i class="sw move"></i>their move</span>
+      <span><i class="sw hit"></i>their attack!</span>
     </div>
   </header>
   <div id="board-area">
@@ -49,6 +50,7 @@ const ctx = canvas.getContext('2d')!;
 const boardAreaEl = document.querySelector<HTMLDivElement>('#board-area')!;
 const hudName = document.querySelector<HTMLSpanElement>('#fightname')!;
 const hudTurn = document.querySelector<HTMLSpanElement>('#turn')!;
+const goalEl = document.querySelector<HTMLDivElement>('#goal')!;
 const phaseFlagEl = document.querySelector<HTMLDivElement>('#phaseflag')!;
 const hintEl = document.querySelector<HTMLDivElement>('#hint')!;
 const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
@@ -67,7 +69,10 @@ let inspect: Vec | null = null;
 let fx: FX[] = [];
 let tweens: { id: number; from: Vec; to: Vec }[] = [];
 let tweenStart = 0;
+let tweenDur = TWEEN_MS;
 let frozenTelegraphs: Telegraph[] | null = null;
+/** set while resolving if the bramble got stuffed — shown as the next hint */
+let blockedNote: string | null = null;
 
 // ---------- overlays ----------
 
@@ -96,10 +101,9 @@ function showOverlay(title: string, body: string, choices: Choice[]) {
 
 function title() {
   showOverlay(
-    'Thistledown 🌼',
+    'Overgrown 🌼',
     'The meadow is overgrown and the Keeper’s lantern is lit. Lead your friends, ' +
-      'read the bramble’s intentions, and take the meadow back one clearing at a time. ' +
-      'Nothing dies out here — promise.',
+      'read the bramble’s intentions, and take the meadow back one clearing at a time.',
     [{ label: 'Set out', fn: startRun }],
   );
 }
@@ -112,9 +116,11 @@ function startRun() {
 function fightIntro() {
   if (!run) return;
   const spec = FIGHTS[run.fightIndex];
-  showOverlay(`Clearing ${run.fightIndex + 1}: ${spec.name}`, spec.intro, [
-    { label: 'Onward', fn: beginFight },
-  ]);
+  showOverlay(
+    `Clearing ${run.fightIndex + 1}: ${spec.name}`,
+    `${spec.intro}<span class="objective">🌼 ${OBJECTIVE}</span>`,
+    [{ label: 'Onward', fn: beginFight }],
+  );
 }
 
 function beginFight() {
@@ -161,11 +167,15 @@ function endOfFight() {
   afterFightWon(run, lineup, alive);
 
   if (run.status === 'won') {
+    const friends = run.companions.filter((c) => !c.shaken).length;
     showOverlay(
       'The meadow is quiet 🌼',
-      'The Gloom pops into a thousand flowers. Somewhere behind you, someone puts a kettle on. You won the whole thing.',
+      'The Gloom pops into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
+        `You won the whole thing — ${FIGHTS.length} clearings taken back, ` +
+        `and ${friends + 1} of you walking home for tea.`,
       [{ label: 'New run', fn: startRun }],
     );
+    rainPetals();
     return;
   }
 
@@ -199,8 +209,24 @@ function endOfFight() {
   );
 }
 
+/** Flower confetti over the current overlay. Purely ceremonial. */
+function rainPetals() {
+  const flowers = ['🌼', '🌸', '💮', '🌷'];
+  for (let i = 0; i < 28; i++) {
+    const p = document.createElement('span');
+    p.className = 'petal';
+    p.textContent = flowers[i % flowers.length];
+    p.style.left = `${(i * 37 + 11) % 100}%`;
+    p.style.animationDelay = `${(i % 7) * 0.45}s`;
+    p.style.animationDuration = `${3 + (i % 5) * 0.6}s`;
+    overlayEl.append(p);
+  }
+}
+
 function promotionChoice() {
   const options: PromotionKind[] = ['hopper', 'slink', 'rumble'];
+  // the Duchess only answers late in the run
+  if (run && run.fightIndex >= 4) options.push('duchess');
   showOverlay(
     'Something blossoms ✨',
     'Crossing the whole meadow changes a critter. Who do they become?',
@@ -230,6 +256,11 @@ function refreshHud() {
   if (!run || !fight) return;
   hudName.textContent = `${fight.name} (${run.fightIndex + 1}/${FIGHTS.length})`;
   hudTurn.textContent = phaseLabel();
+  const left = enemies(fight).length;
+  goalEl.textContent =
+    fight.status === 'won'
+      ? 'Clearing won! 🌼'
+      : `${OBJECTIVE} 🌿 ${left} left`;
   phaseFlagEl.textContent = phase === 'enemy' ? "🌱 the bramble's move" : '';
   phaseFlagEl.classList.toggle('show', phase === 'enemy' && fight.status === 'playing');
   renderRoster();
@@ -292,7 +323,14 @@ function selectPiece(pieceId: number) {
 
 function attemptMove(pieceId: number, to: Vec) {
   if (!fight || phase !== 'player') return;
+  const mover = fight.pieces.find((p) => p.id === pieceId);
+  const from = mover ? { x: mover.x, y: mover.y } : null;
   if (!playerMove(fight, pieceId, to)) return;
+  if (from) {
+    tweens = [{ id: pieceId, from, to }];
+    tweenStart = performance.now();
+    tweenDur = PLAYER_TWEEN_MS;
+  }
   selected = null;
   inspect = null;
   drainEvents();
@@ -327,6 +365,7 @@ function beginEnemyTurn() {
 
   setTimeout(() => {
     if (!fight) return;
+    blockedNote = null;
     resolveEnemyTurn(fight);
     drainEvents();
 
@@ -341,6 +380,7 @@ function beginEnemyTurn() {
       }
     }
     tweenStart = performance.now();
+    tweenDur = TWEEN_MS;
     refreshHud();
 
     setTimeout(
@@ -348,7 +388,7 @@ function beginEnemyTurn() {
         tweens = [];
         frozenTelegraphs = null;
         phase = 'player';
-        if (fight!.status === 'playing') hintEl.textContent = DEFAULT_HINT;
+        if (fight!.status === 'playing') hintEl.textContent = blockedNote ?? DEFAULT_HINT;
         refreshHud();
         if (fight!.status !== 'playing') setTimeout(endOfFight, 350);
       },
@@ -403,7 +443,12 @@ canvas.addEventListener('mousemove', (ev) => {
 function drainEvents() {
   if (!fight) return;
   for (const ev of fight.events) {
-    fx.push({ at: ev.at, kind: ev.type === 'capture' ? 'poof' : 'shaken', t: 0 });
+    if (ev.type === 'blocked') {
+      fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      blockedNote = `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`;
+    } else {
+      fx.push({ at: ev.at, kind: ev.type === 'capture' ? 'poof' : 'shaken', t: 0 });
+    }
   }
   fight.events = [];
 }
@@ -416,7 +461,9 @@ function sizeCanvas() {
   const availW = Math.max(60, area.width - 8);
   const availH = Math.max(60, area.height - 8);
   const scale = Math.max(1, Math.floor(Math.min(availW / canvas.width, availH / canvas.height)));
-  canvas.style.width = `${canvas.width * scale}px`;
+  const w = `${canvas.width * scale}px`;
+  if (canvas.style.width === w) return; // no-op rescales feed the ResizeObserver loop
+  canvas.style.width = w;
   canvas.style.height = `${canvas.height * scale}px`;
 }
 
@@ -428,7 +475,7 @@ function frame(time: number) {
   if (fight) {
     let overrides: PosOverrides | undefined;
     if (tweens.length) {
-      const t = Math.min(1, (performance.now() - tweenStart) / TWEEN_MS);
+      const t = Math.min(1, (performance.now() - tweenStart) / tweenDur);
       overrides = new Map(tweens.map((tw) => [tw.id, lerp(tw.from, tw.to, t)]));
     }
     draw(

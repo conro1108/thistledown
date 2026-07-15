@@ -81,7 +81,7 @@ function e(kind: Kind, x: number, y: number): Spawn {
 export const FIGHTS: FightSpec[] = [
   {
     name: 'Meadow Edge',
-    intro: 'Thistles in the clover. Watch their arrows — they always show you their next move.',
+    intro: 'Thistles in the clover. An arrow marks the one about to move — and exactly where it’s going.',
     w: 6,
     h: 6,
     acts: 1,

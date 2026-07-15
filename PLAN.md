@@ -1,4 +1,4 @@
-# Thistledown — Implementation Plan
+# Overgrown — Implementation Plan
 
 Living doc: check things off, reorder freely. DESIGN.md holds the vision; this holds the
 build order. Rule: thin vertical slice first (one playable fight e2e), then features by
@@ -78,7 +78,7 @@ Sprites cameo, a proper battle log (right now there's no persistent record of
 
 ## Decisions so far
 
-- **Name: Thistledown** (not chess-y on purpose).
+- **Name: Overgrown** (not chess-y on purpose).
 - Pure capture both ways, no HP (bosses will be the exception later).
 - Telegraphs are re-checked for legality when they resolve — so blocking a thistle
   head-on works (pawns can't capture forward; the game must teach true blocking).

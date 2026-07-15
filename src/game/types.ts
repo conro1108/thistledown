@@ -35,7 +35,7 @@ export interface Telegraph {
 export type Rng = () => number;
 
 export interface FightEvent {
-  type: 'capture' | 'shaken';
+  type: 'capture' | 'shaken' | 'blocked';
   at: Vec;
   kind: Kind;
 }
