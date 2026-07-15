@@ -48,14 +48,27 @@ priority. Don't overspec ahead of what's built.
   - tap-to-inspect works for the touch case (mousemove-only hover doesn't
     fire on a phone) — tapping any piece, friend or enemy, shows its threat
     squares, not just its owner's move squares
-- [ ] Camp: heal shaken early, snacks (small permanent buffs)
-- [ ] First trinkets (3–5, run-defining passives)
-- [ ] Region-2/3 boss with the cornering (no-safe-square) rule
-- [ ] Mid-run save (localStorage; serialize seed + decision log)
+- [x] Enemy AI plays the whole side's best move (was round-robin activation,
+      which visibly left free captures on the table)
+- [x] Stalemate guard: `playerHasMove()` + the UI auto-waits, loudly, when
+      the whole band is hemmed in
+- [x] Camp (before clearings 3 and 5, pick one comfort): Warm mash heals all
+      shaken now; Honeycake makes one companion permanently *spry* — a plain
+      non-capturing one-step, so attack patterns stay true to the piece
+- [x] First trinkets: Dandelion Cloak (once per fight a caught friend — the
+      Keeper included — retreats to the home row), Acorn Whistle (hoppers are
+      spry), Second Breakfast (first move each fight can be two moves). Free
+      pick-of-two after clearing 1; one more may appear at each camp
+- [x] Boss: The Bramble Heart (7th fight). Steps like a keeper, can't be
+      landed on; beaten when its square and every escape square are covered.
+      It dreads covered squares and stands still rather than step into danger
+- [x] Mid-run save: `session.ts` decision-log state machine (seed + log in
+      localStorage, replayed to reconstruct — never raw board state); title
+      screen offers "Keep going", resumes mid-fight
 - [ ] Sound: WebAudio chiptune, captures pop into flowers
 - [ ] Real art pass (current sprites are placeholders-with-charm)
-- [ ] Stalemate guard (a "wait" action, or detect no-legal-moves)
-- [ ] Balance pass on the fight ladder (current numbers are a guess)
+- [ ] Balance pass on the fight ladder (current numbers are a guess — and the
+      best-move AI change + the boss both made things meaner)
 
 ## P3 — Later
 
