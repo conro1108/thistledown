@@ -239,6 +239,12 @@ function assignTelegraphs(s: FightState) {
   for (const r of ranked.slice(0, n)) {
     s.telegraphs.push({ pieceId: r.id, to: r.to });
   }
+  // the Heart holding still is information — keep a null telegraph so the
+  // renderer can show it digging in rather than nothing at all
+  const heart = es.find((p) => p.kind === 'heart');
+  if (heart && !s.telegraphs.some((t) => t.pieceId === heart.id)) {
+    s.telegraphs.push({ pieceId: heart.id, to: null });
+  }
 }
 
 /**

@@ -171,7 +171,10 @@ describe('fight loop', () => {
       4,
       4,
     );
-    expect(s.telegraphs.some((t) => t.pieceId === idAt(s, 0, 0))).toBe(false);
+    // it telegraphs "holding still" (a null target) rather than nothing
+    const ht = s.telegraphs.find((t) => t.pieceId === idAt(s, 0, 0));
+    expect(ht).toBeDefined();
+    expect(ht!.to).toBeNull();
     playerMove(s, idAt(s, 3, 3), { x: 2, y: 2 });
     resolveEnemyTurn(s);
     expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 0, y: 0 });

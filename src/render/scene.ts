@@ -145,42 +145,68 @@ function corners(ctx: CanvasRenderingContext2D, x: number, y: number, col: strin
   }
 }
 
-/** Chunky pixel arrow from one cell's center toward another's. */
+/**
+ * Chunky dotted telegraph path. Leapers get their true L — the long leg,
+ * then the turn — so the shape of the hop is the thing players memorize.
+ * Every leg is axis-aligned or a perfect diagonal, so the dots and the
+ * arrowhead always sit crisply on the pixel grid.
+ */
 function arrow(ctx: CanvasRenderingContext2D, from: Vec, to: Vec, col: string) {
-  const ax = from.x * TILE + 8;
-  const ay = from.y * TILE + 8;
-  const bx = to.x * TILE + 8;
-  const by = to.y * TILE + 8;
-  const dist = Math.hypot(bx - ax, by - ay);
-  if (dist < 1) return;
-  const ux = (bx - ax) / dist;
-  const uy = (by - ay) / dist;
-  // stop the tip short of the target's center so the head isn't hidden
-  // under whatever is standing there
-  const tipD = dist - 6;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const cells: Vec[] =
+    dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy)
+      ? Math.abs(dx) > Math.abs(dy)
+        ? [from, { x: to.x, y: from.y }, to]
+        : [from, { x: from.x, y: to.y }, to]
+      : [from, to];
+  const pts = cells.map((c) => ({ x: c.x * TILE + 8, y: c.y * TILE + 8 }));
   ctx.fillStyle = col;
-  for (let d = 6; d < tipD - 4; d += 4) {
-    ctx.fillRect(Math.round(ax + ux * d) - 1, Math.round(ay + uy * d) - 1, 2, 2);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    if (dist < 1) continue;
+    const ux = (b.x - a.x) / dist;
+    const uy = (b.y - a.y) / dist;
+    const last = i === pts.length - 2;
+    const start = i === 0 ? 6 : 3; // clear the mover's own sprite first
+    const end = last ? dist - 7 : dist - 2; // leave room for the head / elbow
+    for (let d = start; d <= end; d += 4) {
+      ctx.fillRect(Math.round(a.x + ux * d) - 1, Math.round(a.y + uy * d) - 1, 2, 2);
+    }
+    if (!last) ctx.fillRect(Math.round(b.x) - 1, Math.round(b.y) - 1, 2, 2); // the elbow
+    else arrowHead(ctx, b, Math.sign(Math.round(b.x - a.x)), Math.sign(Math.round(b.y - a.y)));
   }
-  const phx = -uy;
-  const phy = ux;
+}
+
+/** Crisp pixel arrowhead pointing along an axis or diagonal (sx,sy ∈ -1..1). */
+function arrowHead(ctx: CanvasRenderingContext2D, at: Vec, sx: number, sy: number) {
+  const tx = at.x - sx * 4;
+  const ty = at.y - sy * 4;
+  const px = -sy;
+  const py = sx;
   for (let i = 0; i < 4; i++) {
-    const cx = ax + ux * (tipD - i * 1.3);
-    const cy = ay + uy * (tipD - i * 1.3);
-    const half = i * 0.9;
-    for (let j = -2; j <= 2; j++) {
-      const off = (half * j) / 2;
-      ctx.fillRect(Math.round(cx + phx * off), Math.round(cy + phy * off), 1, 1);
+    const w = Math.min(i, 2);
+    for (let j = -w; j <= w; j++) {
+      ctx.fillRect(tx - sx * i + px * j, ty - sy * i + py * j, 1, 1);
     }
   }
 }
 
-/** Tiny "z" over an enemy that has no legal move this round. */
+/** A "zZ" over an enemy that is holding still this round. */
 function sleepGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  const px = x * TILE + 11;
+  const px = x * TILE + 9;
   const py = y * TILE + 1;
+  const z = (ox: number, oy: number, w: number) => {
+    ctx.fillRect(ox, oy, w, 1);
+    for (let i = 0; i < w - 2; i++) ctx.fillRect(ox + w - 2 - i, oy + 1 + i, 1, 1);
+    ctx.fillRect(ox, oy + w - 1, w, 1);
+  };
+  ctx.fillStyle = '#241533'; // shadow so it reads on bright grass
+  z(px + 1, py + 2, 4);
+  z(px + 5, py, 3);
   ctx.fillStyle = '#efe9f7';
-  ctx.fillRect(px, py, 3, 1);
-  ctx.fillRect(px + 1, py + 1, 1, 1);
-  ctx.fillRect(px, py + 2, 3, 1);
+  z(px, py + 1, 4);
+  z(px + 4, py - 1, 3);
 }

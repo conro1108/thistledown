@@ -444,13 +444,14 @@ function phaseLabel(): string {
   if (!fight) return '';
   if (fight.status === 'lost') return 'lantern out';
   if (fight.status === 'won') return 'clearing won!';
-  return phase === 'enemy' ? 'the bramble moves…' : `your move · turn ${fight.turn}`;
+  return phase === 'enemy' ? '🌱 the bramble moves…' : `🌼 your move · turn ${fight.turn}`;
 }
 
 function refreshHud() {
   if (!run || !fight) return;
   hudName.textContent = `${fight.name} (${run.fightIndex + 1}/${FIGHTS.length})`;
   hudTurn.textContent = phaseLabel();
+  hudTurn.className = fight.status !== 'playing' ? 'done' : phase;
   const heart = fight.pieces.find((p) => p.kind === 'heart');
   const left = enemies(fight).length - (heart ? 1 : 0);
   goalEl.textContent =
@@ -572,10 +573,13 @@ function proceedAfterPlayerAction() {
 function beginEnemyTurn() {
   if (!fight) return;
   phase = 'enemy';
-  hintEl.textContent = "Watch the bramble's move…";
+  const snapTelegraphs = fight.telegraphs.map((t) => ({ ...t }));
+  // "nothing will move" is its own beat: walled-off brambles, or the Heart
+  // digging in — say it out loud instead of playing a silent pause
+  const anyAction = snapTelegraphs.some((t) => t.to);
+  hintEl.textContent = anyAction ? "Watch the bramble's move…" : 'The bramble stirs…';
   refreshHud();
 
-  const snapTelegraphs = fight.telegraphs.map((t) => ({ ...t }));
   const snapPositions = new Map<number, Vec>(
     fight.pieces.filter((p) => p.side === 'bramble').map((p) => [p.id, { x: p.x, y: p.y }]),
   );
@@ -583,7 +587,7 @@ function beginEnemyTurn() {
 
   setTimeout(() => {
     if (!fight) return;
-    blockedNote = null;
+    blockedNote = anyAction ? null : 'The bramble holds still — nothing moves this turn. Go!';
     doEntry({ t: 'resolve' });
     drainEvents();
 
