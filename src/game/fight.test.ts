@@ -37,6 +37,20 @@ describe('fight loop', () => {
     expect(s.telegraphs).toHaveLength(2);
   });
 
+  it('the whole side plays its best move: a capture is telegraphed over a drift, even from a "not its turn" enemy', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [
+        { kind: 'thistle', x: 0, y: 0 }, // spawned first, but can only drift
+        { kind: 'thistle', x: 3, y: 3 }, // has a forward-diagonal capture on (4,4)
+      ],
+      1,
+    );
+    expect(s.telegraphs).toHaveLength(1);
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+    expect(s.telegraphs[0].pieceId).toBe(idAt(s, 3, 3));
+  });
+
   it('an enemy telegraphing a friend captures it on resolve (friend becomes shaken, not game over)', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
@@ -79,7 +93,9 @@ describe('fight loop', () => {
     // the game keeps going — and tells the player their block worked
     expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'thistle')).toBe(true);
     expect(s.turn).toBe(2);
-    expect(s.telegraphs.length).toBeGreaterThan(0);
+    // the sole thistle is still walled in, so it has no legal move to telegraph —
+    // no phantom null telegraph. It re-telegraphs the moment a lane opens up.
+    expect(s.telegraphs).toHaveLength(0);
   });
 
   it('a hopper can capture a golem sitting on the back rank', () => {

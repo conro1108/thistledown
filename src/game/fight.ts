@@ -29,7 +29,6 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     pieces,
     telegraphs: [],
     actsPerTurn: cfg.actsPerTurn,
-    cursor: 0,
     turn: 1,
     status: 'playing',
     rng,
@@ -143,17 +142,22 @@ function assignTelegraphs(s: FightState) {
   s.telegraphs = [];
   if (es.length === 0) return;
   const n = Math.min(s.actsPerTurn, es.length);
-  for (let i = 0; i < n; i++) {
-    const e = es[(s.cursor + i) % es.length];
-    s.telegraphs.push({ pieceId: e.id, to: chooseTarget(s, e) });
+  // The whole bramble side plays its strongest hand: score every enemy's best
+  // move and telegraph the n meanest. Not round-robin — a capture on the table
+  // gets taken by whoever can take it, not left because it "isn't their turn."
+  const ranked = es
+    .map((e) => bestMove(s, e))
+    .filter((r) => r.to != null)
+    .sort((a, b) => b.score - a.score);
+  for (const r of ranked.slice(0, n)) {
+    s.telegraphs.push({ pieceId: r.id, to: r.to });
   }
-  s.cursor = (s.cursor + n) % es.length;
 }
 
 /** Prefer capturing the keeper, then any friend, else drift toward the keeper. */
-function chooseTarget(s: FightState, e: Piece): Vec | null {
+function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score: number } {
   const opts = movesFor(s, e);
-  if (opts.length === 0) return null;
+  if (opts.length === 0) return { id: e.id, to: null, score: -Infinity };
   const k = keeper(s);
   let best: Vec | null = null;
   let bestScore = -Infinity;
@@ -168,5 +172,5 @@ function chooseTarget(s: FightState, e: Piece): Vec | null {
       best = o;
     }
   }
-  return best;
+  return { id: e.id, to: best, score: bestScore };
 }

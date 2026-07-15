@@ -47,7 +47,6 @@ export interface FightState {
   pieces: Piece[];
   telegraphs: Telegraph[];
   actsPerTurn: number;
-  cursor: number; // round-robin position over enemies for activations
   turn: number;
   status: 'playing' | 'won' | 'lost';
   rng: Rng;
