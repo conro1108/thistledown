@@ -1,6 +1,6 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
-import { createFight, playerMove, promote, type PromotionKind } from './game/fight';
+import { createFight, playerMove, promote, resolveEnemyTurn, type PromotionKind } from './game/fight';
 import {
   afterFightWon,
   buildFightConfig,
@@ -12,13 +12,33 @@ import {
   ROSTER_CAP,
   type RunState,
 } from './game/run';
-import type { FightState, Kind, Vec } from './game/types';
-import { draw, TILE, type FX } from './render/scene';
+import type { FightState, Kind, Telegraph, Vec } from './game/types';
+import { draw, TILE, type FX, type PosOverrides } from './render/scene';
+import { drawSprite } from './render/sprites';
+
+const GOAL_TEXT = 'Goal: capture every last bramble creature in the clearing.';
+const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing square to move them.';
+const PAUSE_MS = 500; // beat after your move, before the bramble acts
+const TWEEN_MS = 280; // how long their slide/leap takes to draw
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <div id="hud"><span id="fightname">Thistledown</span><span id="turn"></span></div>
-  <div id="board-wrap"><canvas id="board" width="96" height="96"></canvas></div>
+  <header id="hud">
+    <div id="hud-row"><span id="fightname">Thistledown</span><span id="turn"></span></div>
+    <div id="goal">${GOAL_TEXT}</div>
+    <div id="legend">
+      <span><i class="sw go"></i>you can go</span>
+      <span><i class="sw move"></i>they'll go</span>
+      <span><i class="sw hit"></i>they'll strike!</span>
+    </div>
+  </header>
+  <div id="board-area">
+    <div class="sun"></div>
+    <div id="board-wrap">
+      <div id="phaseflag"></div>
+      <canvas id="board" width="96" height="96"></canvas>
+    </div>
+  </div>
   <div id="hint"></div>
   <div id="roster"></div>
   <div id="overlay" class="hidden"></div>
@@ -26,21 +46,28 @@ app.innerHTML = `
 
 const canvas = document.querySelector<HTMLCanvasElement>('#board')!;
 const ctx = canvas.getContext('2d')!;
+const boardAreaEl = document.querySelector<HTMLDivElement>('#board-area')!;
 const hudName = document.querySelector<HTMLSpanElement>('#fightname')!;
 const hudTurn = document.querySelector<HTMLSpanElement>('#turn')!;
+const phaseFlagEl = document.querySelector<HTMLDivElement>('#phaseflag')!;
 const hintEl = document.querySelector<HTMLDivElement>('#hint')!;
 const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
 const overlayEl = document.querySelector<HTMLDivElement>('#overlay')!;
 
-const DEFAULT_HINT =
-  'Click a friend to see where they can go. Hover anything to see every square it can reach.';
+type Phase = 'player' | 'enemy';
 
 let run: RunState | null = null;
 let fight: FightState | null = null;
 let lineup: number[] = [];
+/** companion index (in run.companions) -> its live piece id this fight */
+let companionPieceId = new Map<number, number>();
+let phase: Phase = 'player';
 let selected: number | null = null;
-let hover: Vec | null = null;
+let inspect: Vec | null = null;
 let fx: FX[] = [];
+let tweens: { id: number; from: Vec; to: Vec }[] = [];
+let tweenStart = 0;
+let frozenTelegraphs: Telegraph[] | null = null;
 
 // ---------- overlays ----------
 
@@ -94,13 +121,17 @@ function beginFight() {
   if (!run) return;
   const built = buildFightConfig(run);
   lineup = built.lineup;
+  companionPieceId = new Map(lineup.map((compIdx, j) => [compIdx, 2 + j]));
   fight = createFight(built.cfg, run.rng);
+  phase = 'player';
   selected = null;
-  hover = null;
+  inspect = null;
   fx = [];
+  tweens = [];
+  frozenTelegraphs = null;
   canvas.width = fight.w * TILE;
   canvas.height = fight.h * TILE;
-  sizeCanvas();
+  requestAnimationFrame(sizeCanvas);
   hintEl.textContent = DEFAULT_HINT;
   refreshHud();
 }
@@ -118,16 +149,14 @@ function endOfFight() {
 
   // settle roster: who survived (and keep any mid-fight evolutions)
   const alive = new Set<number>();
-  lineup.forEach((compIdx, j) => {
-    const piece = fight!.pieces.find((p) => p.id === 2 + j && p.side === 'friend');
+  for (const [compIdx, pieceId] of companionPieceId) {
+    const piece = fight.pieces.find((p) => p.id === pieceId && p.side === 'friend');
     if (piece) {
       alive.add(compIdx);
-      run!.companions[compIdx].kind = piece.kind;
+      run.companions[compIdx].kind = piece.kind;
     }
-  });
-  const shakenNames = lineup
-    .filter((i) => !alive.has(i))
-    .map((i) => run!.companions[i].name);
+  }
+  const shakenNames = lineup.filter((i) => !alive.has(i)).map((i) => run!.companions[i].name);
   afterFightWon(run, lineup, alive);
 
   if (run.status === 'won') {
@@ -181,7 +210,7 @@ function promotionChoice() {
         promote(fight!, kind);
         drainEvents();
         refreshHud();
-        if (fight!.status !== 'playing') setTimeout(endOfFight, 650);
+        beginEnemyTurn();
       },
     })),
   );
@@ -189,22 +218,139 @@ function promotionChoice() {
 
 // ---------- hud ----------
 
+function phaseLabel(): string {
+  if (!fight) return '';
+  if (fight.status === 'lost') return 'lantern out';
+  if (fight.status === 'won') return 'clearing won!';
+  return phase === 'enemy' ? "the bramble moves…" : `your move · turn ${fight.turn}`;
+}
+
 function refreshHud() {
   if (!run || !fight) return;
   hudName.textContent = `${fight.name} (${run.fightIndex + 1}/${FIGHTS.length})`;
-  hudTurn.textContent = `turn ${fight.turn}`;
-  const chips = [`<span class="chip">🏮 The Keeper</span>`];
-  for (const c of run.companions) {
-    chips.push(
-      `<span class="chip${c.shaken ? ' shaken' : ''}">${c.name} the ${KIND_INFO[c.kind].title}${c.shaken ? ' 💤' : ''}</span>`,
+  hudTurn.textContent = phaseLabel();
+  phaseFlagEl.textContent = phase === 'enemy' ? "🌱 the bramble's move" : '';
+  phaseFlagEl.classList.toggle('show', phase === 'enemy' && fight.status === 'playing');
+  renderRoster();
+}
+
+function renderRoster() {
+  rosterEl.innerHTML = '';
+  if (!run || !fight) return;
+  rosterEl.append(rosterButton('The Keeper', 'keeper', 1, false));
+  for (let i = 0; i < run.companions.length; i++) {
+    const c = run.companions[i];
+    const pieceId = companionPieceId.get(i);
+    const alive = pieceId != null && fight.pieces.some((p) => p.id === pieceId);
+    rosterEl.append(
+      rosterButton(c.name, c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? '💤' : undefined),
     );
   }
-  rosterEl.innerHTML = chips.join('');
+}
+
+function rosterButton(name: string, kind: Kind, pieceId: number, disabled: boolean, badge?: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.className = 'roster-btn' + (selected === pieceId ? ' selected' : '');
+  b.disabled = disabled || phase !== 'player' || !fight || fight.status !== 'playing';
+  const mini = document.createElement('canvas');
+  mini.className = 'mini';
+  mini.width = 12;
+  mini.height = 12;
+  drawSprite(mini.getContext('2d')!, kind, 0, 0);
+  b.append(mini);
+  const label = document.createElement('span');
+  label.className = 'rb-name';
+  label.textContent = badge ? `${name} ${badge}` : name;
+  const sub = document.createElement('span');
+  sub.className = 'rb-kind';
+  sub.textContent = KIND_INFO[kind].title;
+  b.append(label, sub);
+  b.onclick = () => selectPiece(pieceId);
+  return b;
 }
 
 function describe(kind: Kind): string {
   const info = KIND_INFO[kind];
   return `${info.title}: ${info.blurb}`;
+}
+
+// ---------- selection & movement ----------
+
+function selectPiece(pieceId: number) {
+  if (!fight || phase !== 'player' || fight.status !== 'playing') return;
+  const p = fight.pieces.find((q) => q.id === pieceId);
+  if (!p) return;
+  inspect = { x: p.x, y: p.y };
+  selected = p.side === 'friend' ? p.id : null;
+  hintEl.textContent = describe(p.kind);
+  refreshHud();
+}
+
+function attemptMove(pieceId: number, to: Vec) {
+  if (!fight || phase !== 'player') return;
+  if (!playerMove(fight, pieceId, to)) return;
+  selected = null;
+  inspect = null;
+  drainEvents();
+  refreshHud();
+  if (fight.pendingPromotion != null) {
+    promotionChoice();
+    return;
+  }
+  if (fight.status !== 'playing') {
+    setTimeout(endOfFight, 650);
+    return;
+  }
+  beginEnemyTurn();
+}
+
+/**
+ * Pause on the pre-resolve board so the player registers the threat, resolve
+ * the enemy telegraphs, then tween pieces into their new squares — a
+ * distinct, watchable "their turn" beat instead of an instant state swap.
+ */
+function beginEnemyTurn() {
+  if (!fight) return;
+  phase = 'enemy';
+  hintEl.textContent = "Watch the bramble's move…";
+  refreshHud();
+
+  const snapTelegraphs = fight.telegraphs.map((t) => ({ ...t }));
+  const snapPositions = new Map<number, Vec>(
+    fight.pieces.filter((p) => p.side === 'bramble').map((p) => [p.id, { x: p.x, y: p.y }]),
+  );
+  frozenTelegraphs = snapTelegraphs;
+
+  setTimeout(() => {
+    if (!fight) return;
+    resolveEnemyTurn(fight);
+    drainEvents();
+
+    tweens = [];
+    for (const t of snapTelegraphs) {
+      if (!t.to) continue;
+      const from = snapPositions.get(t.pieceId);
+      const stillThere = fight.pieces.find((p) => p.id === t.pieceId);
+      if (!from || !stillThere) continue;
+      if (stillThere.x !== from.x || stillThere.y !== from.y) {
+        tweens.push({ id: t.pieceId, from, to: { x: stillThere.x, y: stillThere.y } });
+      }
+    }
+    tweenStart = performance.now();
+    refreshHud();
+
+    setTimeout(
+      () => {
+        tweens = [];
+        frozenTelegraphs = null;
+        phase = 'player';
+        if (fight!.status === 'playing') hintEl.textContent = DEFAULT_HINT;
+        refreshHud();
+        if (fight!.status !== 'playing') setTimeout(endOfFight, 350);
+      },
+      tweens.length ? TWEEN_MS : 60,
+    );
+  }, PAUSE_MS);
 }
 
 // ---------- input ----------
@@ -219,47 +365,35 @@ function cellFromEvent(ev: MouseEvent): Vec | null {
 }
 
 canvas.addEventListener('click', (ev) => {
-  if (!fight || fight.status !== 'playing') return;
+  if (!fight || fight.status !== 'playing' || phase !== 'player') return;
   const c = cellFromEvent(ev);
   if (!c) return;
 
   if (selected != null) {
     const sel = fight.pieces.find((p) => p.id === selected);
     if (sel && movesFor(fight, sel).some((m) => m.x === c.x && m.y === c.y)) {
-      playerMove(fight, selected, c);
-      selected = null;
-      drainEvents();
-      refreshHud();
-      if (fight.pendingPromotion != null) {
-        promotionChoice();
-        return;
-      }
-      if (fight.status !== 'playing') setTimeout(endOfFight, 650);
+      attemptMove(selected, c);
       return;
     }
   }
 
   const p = pieceAt(fight, c.x, c.y);
-  if (p && p.side === 'friend') {
-    selected = p.id;
+  inspect = c;
+  if (p) {
+    selected = p.side === 'friend' ? p.id : null;
     hintEl.textContent = describe(p.kind);
   } else {
     selected = null;
-    hintEl.textContent = p ? describe(p.kind) : DEFAULT_HINT;
+    inspect = null;
+    hintEl.textContent = DEFAULT_HINT;
   }
+  refreshHud();
 });
 
 canvas.addEventListener('mousemove', (ev) => {
-  if (!fight) return;
-  hover = cellFromEvent(ev);
-  if (hover && selected == null) {
-    const p = pieceAt(fight, hover.x, hover.y);
-    hintEl.textContent = p ? describe(p.kind) : DEFAULT_HINT;
-  }
-});
-
-canvas.addEventListener('mouseleave', () => {
-  hover = null;
+  if (!fight || phase !== 'player') return;
+  const c = cellFromEvent(ev);
+  if (c && selected == null) inspect = c;
 });
 
 function drainEvents() {
@@ -274,22 +408,44 @@ function drainEvents() {
 
 function sizeCanvas() {
   if (!fight) return;
-  const avail = Math.min(window.innerWidth - 48, 560);
-  const scale = Math.max(2, Math.floor(avail / canvas.width));
+  const area = boardAreaEl.getBoundingClientRect();
+  const availW = Math.max(60, area.width - 8);
+  const availH = Math.max(60, area.height - 8);
+  const scale = Math.max(1, Math.floor(Math.min(availW / canvas.width, availH / canvas.height)));
   canvas.style.width = `${canvas.width * scale}px`;
+  canvas.style.height = `${canvas.height * scale}px`;
 }
 
 window.addEventListener('resize', sizeCanvas);
+window.addEventListener('orientationchange', () => requestAnimationFrame(sizeCanvas));
+if ('ResizeObserver' in window) new ResizeObserver(sizeCanvas).observe(boardAreaEl);
 
 function frame(time: number) {
   if (fight) {
-    draw(ctx, fight, { selected, hover, fx }, time);
+    let overrides: PosOverrides | undefined;
+    if (tweens.length) {
+      const t = Math.min(1, (performance.now() - tweenStart) / TWEEN_MS);
+      overrides = new Map(tweens.map((tw) => [tw.id, lerp(tw.from, tw.to, t)]));
+    }
+    draw(
+      ctx,
+      fight,
+      { selected, hover: inspect, fx, posOverrides: overrides, telegraphOverride: frozenTelegraphs ?? undefined },
+      time,
+    );
     for (const f of fx) f.t++;
     fx = fx.filter((f) => f.t < 26);
-    if (fight.status === 'playing') hudTurn.textContent = `turn ${fight.turn}`;
   }
   requestAnimationFrame(frame);
 }
 
+function lerp(a: Vec, b: Vec, t: number): Vec {
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+}
+
 requestAnimationFrame(frame);
 title();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}

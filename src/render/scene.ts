@@ -1,5 +1,5 @@
 import { movesFor, pieceAt, threatsFor } from '../game/board';
-import type { FightState, Vec } from '../game/types';
+import type { FightState, Telegraph, Vec } from '../game/types';
 import { drawSprite } from './sprites';
 
 export const TILE = 16;
@@ -10,10 +10,17 @@ export interface FX {
   t: number; // frames elapsed
 }
 
+/** id -> fractional board-cell position, for the enemy-move tween. */
+export type PosOverrides = Map<number, Vec>;
+
 export interface View {
   selected: number | null;
   hover: Vec | null;
   fx: FX[];
+  /** while set, drawn instead of s.pieces' real positions (mid-tween) */
+  posOverrides?: PosOverrides;
+  /** while set, drawn instead of s.telegraphs (the round that's resolving) */
+  telegraphOverride?: Telegraph[];
 }
 
 const GRASS_A = '#8fbf6a';
@@ -46,12 +53,14 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
   }
 
   // enemy telegraphs: dotted path + marked target square
-  for (const t of s.telegraphs) {
+  const telegraphs = v.telegraphOverride ?? s.telegraphs;
+  for (const t of telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e || !t.to) continue;
     const targetsFriend = pieceAt(s, t.to.x, t.to.y)?.side === 'friend';
     const col = targetsFriend ? '#e05252' : '#7a5fae';
-    dottedPath(ctx, e, t.to, col);
+    const from = v.posOverrides?.get(e.id) ?? e;
+    dottedPath(ctx, from, t.to, col);
     corners(ctx, t.to.x, t.to.y, col);
   }
 
@@ -83,8 +92,9 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
 
   // pieces, with a 1px integer idle bob (never fractional — pixel grid is sacred)
   for (const p of s.pieces) {
+    const pos = v.posOverrides?.get(p.id) ?? p;
     const bob = (Math.floor(time / 450) + p.id) % 2 === 0 ? 0 : -1;
-    drawSprite(ctx, p.kind, p.x * TILE + 2, p.y * TILE + 2 + bob);
+    drawSprite(ctx, p.kind, Math.round(pos.x * TILE) + 2, Math.round(pos.y * TILE) + 2 + bob);
   }
 
   // capture / shaken effects

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFight, playerMove, promote, type Spawn } from './fight';
+import { createFight, playerMove, promote, resolveEnemyTurn, type Spawn } from './fight';
 import { mulberry32 } from './rng';
 import type { FightState } from './types';
 
@@ -45,6 +45,8 @@ describe('fight loop', () => {
     // thistle's best option is capturing the sprout at (4,4)
     expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
     playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 });
+    expect(s.turn).toBe(1); // enemy turn hasn't resolved yet — that's a separate step now
+    resolveEnemyTurn(s);
     expect(s.status).toBe('playing');
     expect(s.pieces.find((p) => p.kind === 'sprout')).toBeUndefined();
     expect(s.pieces.find((p) => p.kind === 'thistle')!.y).toBe(4);
@@ -58,6 +60,7 @@ describe('fight loop', () => {
     );
     expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
     playerMove(s, idAt(s, 0, 4), { x: 0, y: 3 });
+    resolveEnemyTurn(s);
     expect(s.status).toBe('lost');
   });
 
@@ -68,6 +71,7 @@ describe('fight loop', () => {
     );
     expect(s.telegraphs[0].to).toEqual({ x: 2, y: 3 });
     playerMove(s, idAt(s, 2, 4), { x: 2, y: 3 }); // step into its path
+    resolveEnemyTurn(s);
     const thistle = s.pieces.find((p) => p.kind === 'thistle')!;
     expect(thistle.x).toBe(2);
     expect(thistle.y).toBe(2); // it stayed put
@@ -86,8 +90,10 @@ describe('fight loop', () => {
     expect(playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 })).toBe(false); // input locked
     expect(promote(s, 'rumble')).toBe(true);
     expect(s.pieces.find((p) => p.id === sproutId)!.kind).toBe('rumble');
-    expect(s.turn).toBe(2); // enemy turn resolved after the choice
+    expect(s.turn).toBe(1); // still separate: resolveEnemyTurn is its own step
     expect(s.pendingPromotion).toBeNull();
+    resolveEnemyTurn(s);
+    expect(s.turn).toBe(2);
   });
 
   it('capturing a telegraphed enemy cancels its telegraph', () => {
@@ -100,6 +106,7 @@ describe('fight loop', () => {
       2,
     );
     playerMove(s, idAt(s, 2, 3), { x: 1, y: 1 });
+    resolveEnemyTurn(s);
     expect(s.status).toBe('playing');
     expect(s.pieces.filter((p) => p.side === 'bramble')).toHaveLength(1);
     // new telegraphs only reference living enemies

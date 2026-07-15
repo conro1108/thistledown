@@ -49,8 +49,10 @@ export function keeper(s: FightState): Piece | undefined {
 }
 
 /**
- * Move a friend, then resolve enemy telegraphs and set the next ones.
- * Returns false if the move was illegal (state untouched).
+ * Move a friend and settle the immediate consequences (capture, win,
+ * promotion). Does NOT resolve the enemy turn — call resolveEnemyTurn()
+ * separately once the UI has shown this move on its own. Returns false if
+ * the move was illegal (state untouched).
  */
 export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
   if (s.status !== 'playing' || s.pendingPromotion != null) return false;
@@ -77,24 +79,28 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
     return true; // enemies hold their breath until promote() is called
   }
 
-  finishTurn(s);
   return true;
 }
 
 export type PromotionKind = 'hopper' | 'slink' | 'rumble' | 'duchess';
 
-/** Evolve the pending sprout, then let the enemy turn play out. */
+/** Evolve the pending sprout. Call resolveEnemyTurn() afterward. */
 export function promote(s: FightState, kind: PromotionKind): boolean {
   if (s.pendingPromotion == null) return false;
   const p = s.pieces.find((q) => q.id === s.pendingPromotion);
   s.pendingPromotion = null;
   if (!p) return false;
   p.kind = kind;
-  finishTurn(s);
   return true;
 }
 
-function finishTurn(s: FightState) {
+/**
+ * Resolve the enemy telegraphs into real moves, then set up the next round's
+ * telegraphs. Split out from playerMove so the UI can show "your move
+ * landed" and "the bramble's move" as two distinct, watchable beats.
+ */
+export function resolveEnemyTurn(s: FightState) {
+  if (s.status !== 'playing' || s.pendingPromotion != null) return;
   resolveTelegraphs(s);
   if (s.status !== 'playing') return;
   s.turn++;

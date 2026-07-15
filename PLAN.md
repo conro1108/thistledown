@@ -30,6 +30,24 @@ priority. Don't overspec ahead of what's built.
 
 - [x] Promotion: a sprout reaching the far edge evolves mid-fight (choice of
       hopper/slink/rumble; the evolution sticks to that companion for the run)
+- [x] **Mobile UX pass** (playtest feedback: enemy move was invisible, no stated
+      goal, dead vertical space, roster chips weren't real buttons):
+  - engine split — `playerMove` and `resolveEnemyTurn` are now separate calls,
+    so the UI can show "your move landed" and "the bramble moves…" as two
+    distinct, watchable beats (pause → resolve → tween slide) instead of an
+    instant state swap
+  - full `100dvh` flex layout that actually fills the viewport; a square
+    board is inherently width-capped on a tall phone screen, so the leftover
+    space is now a cozy sky/sun/cloud backdrop instead of a void
+  - roster entries are real `<button>`s (mini sprite + name + piece title),
+    tappable, with a selection ring and disabled/greyed state for shaken or
+    already-captured-this-fight companions
+  - persistent goal line + a 3-swatch legend (you can go / they'll go /
+    they'll strike) under the header, so the color language is explained
+    once and stays visible instead of living only in hover text
+  - tap-to-inspect works for the touch case (mousemove-only hover doesn't
+    fire on a phone) — tapping any piece, friend or enemy, shows its threat
+    squares, not just its owner's move squares
 - [ ] Camp: heal shaken early, snacks (small permanent buffs)
 - [ ] First trinkets (3–5, run-defining passives)
 - [ ] Region-2/3 boss with the cornering (no-safe-square) rule
@@ -41,8 +59,22 @@ priority. Don't overspec ahead of what's built.
 
 ## P3 — Later
 
-Events, node-map branching, meta unlocks, bestiary, ascension, daily seed, PWA,
-mobile layout pass, Cozy Sprites cameo.
+Events, node-map branching, meta unlocks, bestiary, ascension, daily seed, Cozy
+Sprites cameo, a proper battle log (right now there's no persistent record of
+"what just happened," which would help further).
+
+## PWA — DONE (basic)
+
+- [x] `manifest.webmanifest`, hand-rolled pixel-art icons (no image-library
+      dependency — `scripts/make-icons.mjs` is a from-scratch PNG encoder),
+      iOS home-screen meta tags
+- [x] `public/sw.js` — network-first with cache fallback. Deliberately not a
+      hashed-asset precache list (no build-tool integration yet); bump
+      `CACHE` in that file when a release must invalidate old assets
+- [ ] Actually installing this on an iPhone and confirming it launches
+      standalone hasn't been done by a human yet — worth checking before
+      calling PWA support solid
+- [ ] Capacitor/native wrapper is a "maybe someday," not started
 
 ## Decisions so far
 
