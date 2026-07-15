@@ -24,6 +24,8 @@ export interface Piece {
   kind: Kind;
   x: number;
   y: number;
+  /** honeycake'd: may also take a plain (non-capturing) one-step move */
+  spry?: boolean;
 }
 
 /** An enemy's committed next move. `to: null` means it has nowhere to go. */

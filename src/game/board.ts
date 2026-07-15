@@ -72,7 +72,7 @@ export function threatsFor(s: FightState, p: Piece): Vec[] {
 
 function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
   const m = MOVERS[p.kind];
-  const out: Vec[] = [];
+  const out: Vec[] = spryOut(s, p, threats);
 
   if (m.pawn) {
     const dy = forward(p);
@@ -92,7 +92,7 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
         if (occ && occ.side !== p.side) out.push({ x, y });
       }
     }
-    return out;
+    return dedup(out);
   }
 
   if (m.steps) {
@@ -122,5 +122,31 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
     }
   }
 
+  return dedup(out);
+}
+
+/**
+ * Honeycake bonus: plain one-step moves onto empty squares. Never a capture
+ * and never a threat — a spry critter's attack pattern stays its own.
+ */
+function spryOut(s: FightState, p: Piece, threats: boolean): Vec[] {
+  if (!p.spry || threats) return [];
+  const out: Vec[] = [];
+  for (const d of ALL8) {
+    const x = p.x + d.x;
+    const y = p.y + d.y;
+    if (inBounds(s, x, y) && !pieceAt(s, x, y)) out.push({ x, y });
+  }
   return out;
+}
+
+/** Spry steps can coincide with a piece's own moves; collapse repeats. */
+function dedup(vs: Vec[]): Vec[] {
+  const seen = new Set<number>();
+  return vs.filter((v) => {
+    const k = v.y * 64 + v.x;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }

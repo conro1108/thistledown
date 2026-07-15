@@ -5,6 +5,7 @@ export interface Spawn {
   kind: Kind;
   x: number;
   y: number;
+  spry?: boolean;
 }
 
 export interface FightConfig {

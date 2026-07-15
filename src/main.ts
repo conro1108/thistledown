@@ -4,6 +4,9 @@ import { createFight, enemies, playerHasMove, playerMove, promote, resolveEnemyT
 import {
   afterFightWon,
   buildFightConfig,
+  campDue,
+  campHeal,
+  campSnack,
   FIGHTS,
   KIND_INFO,
   newRun,
@@ -198,7 +201,7 @@ function endOfFight() {
 
   if (run.companions.length >= ROSTER_CAP) {
     showOverlay('Clearing won!', body + ' Camp is full of friends already.', [
-      { label: 'Onward', fn: fightIntro },
+      { label: 'Onward', fn: nextStop },
     ]);
     return;
   }
@@ -213,11 +216,68 @@ function endOfFight() {
         sub: KIND_INFO[kind].blurb,
         fn: () => {
           recruit(run!, kind);
+          nextStop();
+        },
+      })),
+      { label: 'Travel light', sub: 'No new friends this time.', fn: nextStop },
+    ],
+  );
+}
+
+/** Between fights: sometimes there's a campfire on the way. */
+function nextStop() {
+  if (run && campDue(run)) campStop();
+  else fightIntro();
+}
+
+function campStop() {
+  if (!run) return;
+  const shaken = run.companions.filter((c) => c.shaken).map((c) => c.name);
+  const snackable = run.companions
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => !c.spry);
+  const choices: Choice[] = [];
+  if (shaken.length) {
+    choices.push({
+      label: 'Warm mash 🍲',
+      sub: `${shaken.join(' and ')} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
+      fn: () => {
+        campHeal(run!);
+        fightIntro();
+      },
+    });
+  }
+  if (snackable.length) {
+    choices.push({
+      label: 'Honeycake 🍯',
+      sub: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
+      fn: honeycakeChoice,
+    });
+  }
+  choices.push({ label: 'Rest quietly', sub: 'Just the crackle of the fire.', fn: fightIntro });
+  showOverlay(
+    'Campfire',
+    'A quiet hollow off the path. The kettle whistles. There’s time for exactly one comfort.',
+    choices,
+  );
+}
+
+function honeycakeChoice() {
+  if (!run) return;
+  showOverlay(
+    'Honeycake 🍯',
+    'Who gets it? (No take-backs — it is a very good cake.)',
+    run.companions
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => !c.spry)
+      .map(({ c, i }) => ({
+        label: c.name,
+        sub: `${KIND_INFO[c.kind].title} — gains a plain one-step move in any direction.`,
+        fn: () => {
+          campSnack(run!, i);
           fightIntro();
         },
       })),
-      { label: 'Travel light', sub: 'No new friends this time.', fn: fightIntro },
-    ],
   );
 }
 
@@ -287,7 +347,7 @@ function renderRoster() {
     const pieceId = companionPieceId.get(i);
     const alive = pieceId != null && fight.pieces.some((p) => p.id === pieceId);
     rosterEl.append(
-      rosterButton(c.name, c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? '💤' : undefined),
+      rosterButton(c.name, c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? '💤' : c.spry ? '🍯' : undefined),
     );
   }
 }

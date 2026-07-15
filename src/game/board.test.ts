@@ -67,6 +67,24 @@ describe('movement', () => {
     expect(has(movesFor(s, r), 0, 2)).toBe(false);
   });
 
+  it('spry adds plain one-step moves onto empty squares only — threats unchanged', () => {
+    const s = fight(
+      [{ kind: 'sprout', x: 2, y: 4, spry: true }, { kind: 'keeper', x: 5, y: 5 }],
+      [{ kind: 'thistle', x: 1, y: 4 }, { kind: 'thistle', x: 2, y: 3 }],
+    );
+    const p = at(s, 2, 4);
+    const moves = movesFor(s, p);
+    expect(has(moves, 3, 4)).toBe(true); // sidestep onto empty
+    expect(has(moves, 2, 5)).toBe(true); // even backward
+    expect(has(moves, 1, 4)).toBe(false); // spry steps never capture
+    expect(has(moves, 2, 3)).toBe(false); // still can't take head-on
+    // attack pattern is untouched: still only the forward diagonals
+    const threats = threatsFor(s, p);
+    expect(has(threats, 1, 3)).toBe(true);
+    expect(has(threats, 3, 3)).toBe(true);
+    expect(threats.length).toBe(2);
+  });
+
   it('keeper steps one square, clipped to the board', () => {
     const s = fight([{ kind: 'keeper', x: 0, y: 0 }], [{ kind: 'thistle', x: 4, y: 4 }]);
     expect(movesFor(s, at(s, 0, 0))).toHaveLength(3);

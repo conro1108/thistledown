@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { afterFightWon, buildFightConfig, FIGHTS, newRun, offerRecruits, recruit } from './run';
+import {
+  afterFightWon,
+  buildFightConfig,
+  campDue,
+  campHeal,
+  campSnack,
+  FIGHTS,
+  newRun,
+  offerRecruits,
+  recruit,
+} from './run';
 
 describe('run', () => {
   it('every fight lineup fits the board with no overlaps', () => {
@@ -42,6 +52,23 @@ describe('run', () => {
     }
     const names = run.companions.map((c) => c.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('camp: due after clearings 2 and 4, heal recovers everyone, honeycake sticks', () => {
+    const run = newRun(5);
+    expect(campDue(run)).toBe(false);
+    run.fightIndex = 2;
+    expect(campDue(run)).toBe(true);
+    run.companions[0].shaken = true;
+    run.companions[1].shaken = true;
+    campHeal(run);
+    expect(run.companions.every((c) => !c.shaken)).toBe(true);
+    campSnack(run, 2);
+    expect(run.companions[2].spry).toBe(true);
+    // the buff reaches the board
+    const { cfg, lineup } = buildFightConfig(run);
+    const j = lineup.indexOf(2);
+    expect(cfg.friends[j + 1].spry).toBe(true);
   });
 
   it('winning the last fight wins the run', () => {

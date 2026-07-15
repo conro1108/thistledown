@@ -6,6 +6,8 @@ export interface Companion {
   kind: Kind;
   name: string;
   shaken: boolean;
+  /** ate a honeycake: permanent plain one-step move */
+  spry?: boolean;
 }
 
 export interface RunState {
@@ -198,6 +200,26 @@ export function recruit(run: RunState, kind: Kind) {
   run.companions.push({ kind, name: makeName(run), shaken: false });
 }
 
+// ---------- camp ----------
+
+/** Camps sit before these clearings (0-based fightIndex). */
+const CAMPS = new Set([2, 4]);
+
+export function campDue(run: RunState): boolean {
+  return run.status === 'playing' && CAMPS.has(run.fightIndex);
+}
+
+/** Warm mash: every shaken friend recovers right now. */
+export function campHeal(run: RunState) {
+  for (const c of run.companions) c.shaken = false;
+}
+
+/** Honeycake: one companion gains a permanent plain one-step move. */
+export function campSnack(run: RunState, companionIdx: number) {
+  const c = run.companions[companionIdx];
+  if (c) c.spry = true;
+}
+
 export interface BuiltFight {
   cfg: FightConfig;
   /** lineup[j] = index into run.companions for friend spawn j+1 (spawn 0 is the keeper) */
@@ -219,7 +241,7 @@ export function buildFightConfig(run: RunState): BuiltFight {
     if (c.shaken || slot >= offsets.length) return;
     const x = cx + offsets[slot++];
     if (x < 0 || x >= spec.w) return;
-    friends.push({ kind: c.kind, x, y: spec.h - 2 });
+    friends.push({ kind: c.kind, x, y: spec.h - 2, spry: c.spry });
     lineup.push(i);
   });
   return {
