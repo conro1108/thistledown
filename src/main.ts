@@ -1,33 +1,8 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
-import {
-  createFight,
-  enemies,
-  playerHasMove,
-  playerMove,
-  promote,
-  resolveEnemyTurn,
-  takeFreeMove,
-  type PromotionKind,
-} from './game/fight';
-import {
-  afterFightWon,
-  buildFightConfig,
-  campDue,
-  campHeal,
-  campSnack,
-  FIGHTS,
-  KIND_INFO,
-  newRun,
-  offerRecruits,
-  offerTrinkets,
-  recruit,
-  ROSTER_CAP,
-  takeTrinket,
-  TRINKETS,
-  type RunState,
-  type TrinketId,
-} from './game/run';
+import { enemies, type PromotionKind } from './game/fight';
+import { FIGHTS, KIND_INFO, TRINKETS, type RunState } from './game/run';
+import { apply, newSession, replay, type LogEntry, type Session } from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
@@ -37,6 +12,7 @@ const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing s
 const PAUSE_MS = 340; // beat after your move, before the bramble acts
 const TWEEN_MS = 190; // how long their slide/leap takes to draw
 const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
+const SAVE_KEY = 'overgrown.save.v1';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -75,9 +51,10 @@ const overlayEl = document.querySelector<HTMLDivElement>('#overlay')!;
 
 type Phase = 'player' | 'enemy';
 
+let sess: Session | null = null;
+// convenient views into the session (same object references)
 let run: RunState | null = null;
 let fight: FightState | null = null;
-let lineup: number[] = [];
 /** companion index (in run.companions) -> its live piece id this fight */
 let companionPieceId = new Map<number, number>();
 let phase: Phase = 'player';
@@ -88,8 +65,45 @@ let tweens: { id: number; from: Vec; to: Vec }[] = [];
 let tweenStart = 0;
 let tweenDur = TWEEN_MS;
 let frozenTelegraphs: Telegraph[] | null = null;
-/** set while resolving if the bramble got stuffed — shown as the next hint */
+/** set while resolving if something noteworthy happened — shown as the next hint */
 let blockedNote: string | null = null;
+
+// ---------- session & save ----------
+
+/** Apply a decision to the session and keep the save current. */
+function doEntry(e: LogEntry): boolean {
+  if (!sess) return false;
+  if (!apply(sess, e)) return false;
+  run = sess.run;
+  fight = sess.fight;
+  persist();
+  return true;
+}
+
+function persist() {
+  if (!sess) return;
+  try {
+    if (sess.stage === 'over') localStorage.removeItem(SAVE_KEY);
+    else localStorage.setItem(SAVE_KEY, JSON.stringify({ seed: sess.run.seed, log: sess.log }));
+  } catch {
+    /* storage full or blocked — the run just won't save */
+  }
+}
+
+/** Rebuild the saved session, or null if there isn't one (or it won't replay). */
+function loadSave(): Session | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as { seed: number; log: LogEntry[] };
+    if (typeof data.seed !== 'number' || !Array.isArray(data.log)) throw new Error('bad save');
+    const s = replay(data.seed, data.log);
+    return s.stage === 'over' ? null : s;
+  } catch {
+    localStorage.removeItem(SAVE_KEY);
+    return null;
+  }
+}
 
 // ---------- overlays ----------
 
@@ -117,17 +131,64 @@ function showOverlay(title: string, body: string, choices: Choice[]) {
 // ---------- run flow ----------
 
 function title() {
+  const saved = loadSave();
+  const choices: Choice[] = [];
+  if (saved) {
+    const friends = saved.run.companions.filter((c) => !c.shaken).length + 1;
+    choices.push({
+      label: 'Keep going',
+      sub: `Clearing ${saved.run.fightIndex + 1} of ${FIGHTS.length}, ${friends} of you on the path.`,
+      fn: () => {
+        sess = saved;
+        stageUi();
+      },
+    });
+  }
+  choices.push({
+    label: saved ? 'Start fresh' : 'Set out',
+    sub: saved ? 'The old path grows over.' : undefined,
+    fn: startRun,
+  });
   showOverlay(
     'Overgrown 🌼',
     'The meadow is overgrown and the Keeper’s lantern is lit. Lead your friends, ' +
       'read the bramble’s intentions, and take the meadow back one clearing at a time.',
-    [{ label: 'Set out', fn: startRun }],
+    choices,
   );
 }
 
 function startRun() {
-  run = newRun(Date.now() % 2147483647);
-  fightIntro();
+  sess = newSession(Date.now() % 2147483647);
+  persist();
+  stageUi();
+}
+
+/** Show whatever screen the session's stage calls for. */
+function stageUi() {
+  if (!sess) return;
+  run = sess.run;
+  fight = sess.fight;
+  switch (sess.stage) {
+    case 'intro':
+      fightIntro();
+      break;
+    case 'fight':
+    case 'promotion':
+      enterFight(true);
+      break;
+    case 'post':
+      endOfFightUi();
+      break;
+    case 'found':
+      trinketFound();
+      break;
+    case 'camp':
+      campStop();
+      break;
+    case 'over':
+      endOfRunUi();
+      break;
+  }
 }
 
 function fightIntro() {
@@ -136,28 +197,44 @@ function fightIntro() {
   showOverlay(
     `Clearing ${run.fightIndex + 1}: ${spec.name}`,
     `${spec.intro}<span class="objective">🌼 ${spec.objective ?? OBJECTIVE}</span>`,
-    [{ label: 'Onward', fn: beginFight }],
+    [
+      {
+        label: 'Onward',
+        fn: () => {
+          doEntry({ t: 'begin' });
+          enterFight(false);
+        },
+      },
+    ],
   );
 }
 
-function beginFight() {
-  if (!run) return;
-  const built = buildFightConfig(run);
-  lineup = built.lineup;
-  companionPieceId = new Map(lineup.map((compIdx, j) => [compIdx, 2 + j]));
-  fight = createFight(built.cfg, run.rng);
+/** Set up the board UI for the session's current fight (fresh or resumed). */
+function enterFight(resume: boolean) {
+  if (!sess || !sess.fight) return;
+  fight = sess.fight;
+  companionPieceId = new Map(sess.lineup.map((compIdx, j) => [compIdx, 2 + j]));
   phase = 'player';
   selected = null;
   inspect = null;
   fx = [];
   tweens = [];
   frozenTelegraphs = null;
+  blockedNote = null;
   canvas.width = fight.w * TILE;
   canvas.height = fight.h * TILE;
   document.querySelector('#board-wrap')!.classList.remove('idle');
   requestAnimationFrame(sizeCanvas);
   hintEl.textContent = DEFAULT_HINT;
   refreshHud();
+  if (resume && sess.stage === 'promotion') {
+    promotionChoice();
+    return;
+  }
+  if (resume && sess.resolveDue) {
+    beginEnemyTurn();
+    return;
+  }
   maybeAutoWait();
 }
 
@@ -166,141 +243,141 @@ function beginFight() {
  * take its turn rather than soft-locking the fight.
  */
 function maybeAutoWait() {
-  if (!fight || fight.status !== 'playing' || phase !== 'player') return;
-  if (playerHasMove(fight)) return;
+  if (!sess || !fight || fight.status !== 'playing' || phase !== 'player') return;
+  if (sess.resolveDue || sess.stage !== 'fight') return;
+  if (fight.pieces.some((p) => p.side === 'friend' && movesFor(fight!, p).length > 0)) return;
   hintEl.textContent = 'Everyone is hemmed in — nowhere to step! Hold tight…';
   setTimeout(beginEnemyTurn, 900);
 }
 
-function endOfFight() {
-  if (!run || !fight) return;
-  if (fight.status === 'lost') {
-    showOverlay(
-      'The lantern goes out',
-      `The brambles got the Keeper in ${fight.name}. Everyone walks home for tea and tries again tomorrow.`,
-      [{ label: 'Try again', fn: startRun }],
-    );
+/** The fight just ended in the session — show the aftermath. */
+function endOfFightUi() {
+  if (!sess || !run) return;
+  if (sess.stage === 'over') {
+    endOfRunUi();
     return;
   }
-
-  // settle roster: who survived (and keep any mid-fight evolutions)
-  const alive = new Set<number>();
-  for (const [compIdx, pieceId] of companionPieceId) {
-    const piece = fight.pieces.find((p) => p.id === pieceId && p.side === 'friend');
-    if (piece) {
-      alive.add(compIdx);
-      run.companions[compIdx].kind = piece.kind;
-    }
-  }
-  const shakenNames = lineup.filter((i) => !alive.has(i)).map((i) => run!.companions[i].name);
-  afterFightWon(run, lineup, alive);
-
-  if (run.status === 'won') {
-    const friends = run.companions.filter((c) => !c.shaken).length;
-    showOverlay(
-      'The meadow is quiet 🌼',
-      'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
-        `You won the whole thing — ${FIGHTS.length} clearings taken back, ` +
-        `and ${friends + 1} of you walking home for tea.`,
-      [{ label: 'New run', fn: startRun }],
-    );
-    rainPetals();
-    return;
-  }
-
+  // stage 'post': clearing won, maybe a recruit is watching
+  const shakenNames = run.companions.filter((c) => c.shaken).map((c) => c.name);
   const shakenNote = shakenNames.length
     ? ` ${shakenNames.join(' and ')} ${shakenNames.length > 1 ? 'are' : 'is'} a bit shaken and will sit the next one out.`
     : '';
   const body = `The brambles scatter into flowers.${shakenNote}`;
 
-  if (run.companions.length >= ROSTER_CAP) {
+  if (!sess.recruitOffers) {
     showOverlay('Clearing won!', body + ' Camp is full of friends already.', [
-      { label: 'Onward', fn: nextStop },
+      {
+        label: 'Onward',
+        fn: () => {
+          doEntry({ t: 'skip' });
+          stageUi();
+        },
+      },
     ]);
     return;
   }
 
-  const offers = offerRecruits(run);
   showOverlay(
     'Clearing won!',
     body + ' Someone shy is watching from the tall grass…',
     [
-      ...offers.map((kind) => ({
+      ...sess.recruitOffers.map((kind) => ({
         label: `Befriend the ${KIND_INFO[kind].title}`,
         sub: KIND_INFO[kind].blurb,
         fn: () => {
-          recruit(run!, kind);
-          nextStop();
+          doEntry({ t: 'recruit', kind });
+          stageUi();
         },
       })),
-      { label: 'Travel light', sub: 'No new friends this time.', fn: nextStop },
+      {
+        label: 'Travel light',
+        sub: 'No new friends this time.',
+        fn: () => {
+          doEntry({ t: 'skip' });
+          stageUi();
+        },
+      },
     ],
   );
 }
 
-/** Between fights: a find in the grass after the first clearing, campfires later. */
-function nextStop() {
+function endOfRunUi() {
   if (!run) return;
-  if (run.fightIndex === 1) trinketFound();
-  else if (campDue(run)) campStop();
-  else fightIntro();
+  if (run.status === 'lost') {
+    showOverlay(
+      'The lantern goes out',
+      `The brambles got the Keeper in ${fight?.name ?? 'the meadow'}. Everyone walks home for tea and tries again tomorrow.`,
+      [{ label: 'Try again', fn: startRun }],
+    );
+    return;
+  }
+  const friends = run.companions.filter((c) => !c.shaken).length;
+  showOverlay(
+    'The meadow is quiet 🌼',
+    'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
+      `You won the whole thing — ${FIGHTS.length} clearings taken back, ` +
+      `and ${friends + 1} of you walking home for tea.`,
+    [{ label: 'New run', fn: startRun }],
+  );
+  rainPetals();
 }
 
 function trinketFound() {
-  if (!run) return;
-  const offers = offerTrinkets(run, 2);
-  if (!offers.length) return fightIntro();
+  if (!sess) return;
   showOverlay(
     'Something glints in the grass ✨',
     'Half-buried by the path. It hums a little. You can only carry one more thing.',
-    offers.map((id) => ({
+    sess.trinketOffers.map((id) => ({
       label: `${TRINKETS[id].icon} ${TRINKETS[id].title}`,
       sub: TRINKETS[id].blurb,
       fn: () => {
-        takeTrinket(run!, id);
-        fightIntro();
+        doEntry({ t: 'trinket', id });
+        stageUi();
       },
     })),
   );
 }
 
 function campStop() {
-  if (!run) return;
+  if (!sess || !run) return;
   const shaken = run.companions.filter((c) => c.shaken).map((c) => c.name);
-  const snackable = run.companions
-    .map((c, i) => ({ c, i }))
-    .filter(({ c }) => !c.spry);
+  const snackable = run.companions.some((c) => !c.spry);
   const choices: Choice[] = [];
   if (shaken.length) {
     choices.push({
       label: 'Warm mash 🍲',
       sub: `${shaken.join(' and ')} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
       fn: () => {
-        campHeal(run!);
-        fightIntro();
+        doEntry({ t: 'heal' });
+        stageUi();
       },
     });
   }
-  if (snackable.length) {
+  if (snackable) {
     choices.push({
       label: 'Honeycake 🍯',
       sub: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
       fn: honeycakeChoice,
     });
   }
-  const found = offerTrinkets(run, 1);
-  if (found.length) {
-    const id: TrinketId = found[0];
+  for (const id of sess.trinketOffers) {
     choices.push({
       label: `${TRINKETS[id].icon} Take the ${TRINKETS[id].title}`,
       sub: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
       fn: () => {
-        takeTrinket(run!, id);
-        fightIntro();
+        doEntry({ t: 'trinket', id });
+        stageUi();
       },
     });
   }
-  choices.push({ label: 'Rest quietly', sub: 'Just the crackle of the fire.', fn: fightIntro });
+  choices.push({
+    label: 'Rest quietly',
+    sub: 'Just the crackle of the fire.',
+    fn: () => {
+      doEntry({ t: 'rest' });
+      stageUi();
+    },
+  });
   showOverlay(
     'Campfire',
     'A quiet hollow off the path. The kettle whistles. There’s time for exactly one comfort.',
@@ -320,8 +397,8 @@ function honeycakeChoice() {
         label: c.name,
         sub: `${KIND_INFO[c.kind].title} — gains a plain one-step move in any direction.`,
         fn: () => {
-          campSnack(run!, i);
-          fightIntro();
+          doEntry({ t: 'snack', idx: i });
+          stageUi();
         },
       })),
   );
@@ -352,7 +429,7 @@ function promotionChoice() {
       label: KIND_INFO[kind].title,
       sub: KIND_INFO[kind].blurb,
       fn: () => {
-        promote(fight!, kind);
+        doEntry({ t: 'promote', kind });
         drainEvents();
         refreshHud();
         proceedAfterPlayerAction();
@@ -367,7 +444,7 @@ function phaseLabel(): string {
   if (!fight) return '';
   if (fight.status === 'lost') return 'lantern out';
   if (fight.status === 'won') return 'clearing won!';
-  return phase === 'enemy' ? "the bramble moves…" : `your move · turn ${fight.turn}`;
+  return phase === 'enemy' ? 'the bramble moves…' : `your move · turn ${fight.turn}`;
 }
 
 function refreshHud() {
@@ -450,10 +527,10 @@ function selectPiece(pieceId: number) {
 }
 
 function attemptMove(pieceId: number, to: Vec) {
-  if (!fight || phase !== 'player') return;
+  if (!sess || !fight || phase !== 'player') return;
   const mover = fight.pieces.find((p) => p.id === pieceId);
   const from = mover ? { x: mover.x, y: mover.y } : null;
-  if (!playerMove(fight, pieceId, to)) return;
+  if (!doEntry({ t: 'move', id: pieceId, to })) return;
   if (from) {
     tweens = [{ id: pieceId, from, to }];
     tweenStart = performance.now();
@@ -469,16 +546,16 @@ function attemptMove(pieceId: number, to: Vec) {
 /** After any player action settles: promotion first, then win/loss, then a
  * banked Second Breakfast move, then the bramble's turn. */
 function proceedAfterPlayerAction() {
-  if (!fight) return;
-  if (fight.pendingPromotion != null) {
+  if (!sess || !fight) return;
+  if (sess.stage === 'promotion') {
     promotionChoice();
     return;
   }
-  if (fight.status !== 'playing') {
-    setTimeout(endOfFight, 650);
+  if (sess.stage !== 'fight') {
+    setTimeout(endOfFightUi, 650);
     return;
   }
-  if (takeFreeMove(fight)) {
+  if (!sess.resolveDue) {
     hintEl.textContent = 'Second Breakfast! 🥞 Take one more move.';
     refreshHud();
     maybeAutoWait();
@@ -507,7 +584,7 @@ function beginEnemyTurn() {
   setTimeout(() => {
     if (!fight) return;
     blockedNote = null;
-    resolveEnemyTurn(fight);
+    doEntry({ t: 'resolve' });
     drainEvents();
 
     tweens = [];
@@ -531,7 +608,7 @@ function beginEnemyTurn() {
         phase = 'player';
         if (fight!.status === 'playing') hintEl.textContent = blockedNote ?? DEFAULT_HINT;
         refreshHud();
-        if (fight!.status !== 'playing') setTimeout(endOfFight, 350);
+        if (fight!.status !== 'playing') setTimeout(endOfFightUi, 350);
         else maybeAutoWait();
       },
       tweens.length ? TWEEN_MS : 60,
