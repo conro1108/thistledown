@@ -1,0 +1,110 @@
+:root {
+  --bg: #221e2a;
+  --panel: #2e2938;
+  --ink: #f0e8d8;
+  --dim: #a898b8;
+  --accent: #ffd166;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Courier New", ui-monospace, monospace;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  width: 100%;
+  max-width: 720px;
+}
+
+#hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  gap: 12px;
+}
+
+#fightname { font-weight: bold; color: var(--accent); }
+#turn { color: var(--dim); }
+
+#board-wrap { position: relative; line-height: 0; }
+
+canvas {
+  image-rendering: pixelated;
+  border: 3px solid #4a4258;
+  border-radius: 4px;
+  background: #6da85e;
+}
+
+#hint {
+  min-height: 2.4em;
+  color: var(--dim);
+  font-size: 13px;
+  text-align: center;
+  max-width: 560px;
+}
+
+#roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.chip {
+  background: var(--panel);
+  border: 1px solid #4a4258;
+  border-radius: 10px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.chip.shaken { opacity: 0.5; }
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 16, 28, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#overlay.hidden { display: none; }
+
+.card {
+  background: var(--panel);
+  border: 3px solid #4a4258;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 460px;
+  text-align: center;
+}
+.card h2 { margin: 0 0 10px; color: var(--accent); }
+.card p { color: var(--ink); line-height: 1.5; }
+.card .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+
+button {
+  font-family: inherit;
+  font-size: 14px;
+  background: #3c3550;
+  color: var(--ink);
+  border: 2px solid #5a5070;
+  border-radius: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: center;
+}
+button:hover { background: #4a4266; border-color: var(--accent); }
+button small { display: block; color: var(--dim); margin-top: 3px; }
