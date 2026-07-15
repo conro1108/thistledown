@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFight, playerMove, promote, resolveEnemyTurn, type Spawn } from './fight';
+import { createFight, playerHasMove, playerMove, promote, resolveEnemyTurn, type Spawn } from './fight';
 import { mulberry32 } from './rng';
 import type { FightState } from './types';
 
@@ -35,6 +35,28 @@ describe('fight loop', () => {
       2,
     );
     expect(s.telegraphs).toHaveLength(2);
+  });
+
+  it('playerHasMove detects a hemmed-in band (stalemate guard)', () => {
+    // 1-wide corridor: keeper boxed by his own sprout, sprout blocked head-on
+    // by a thistle it can't capture forward. Nobody on either side can move.
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 2 }, { kind: 'sprout', x: 0, y: 1 }],
+      [{ kind: 'thistle', x: 0, y: 0 }],
+      1,
+      1,
+      3,
+    );
+    expect(playerHasMove(s)).toBe(false);
+    // the wait is safe: enemy turn resolves (thistle is stuck too) and play continues
+    resolveEnemyTurn(s);
+    expect(s.status).toBe('playing');
+    expect(s.turn).toBe(2);
+  });
+
+  it('playerHasMove is true in an ordinary fight', () => {
+    const s = fight([{ kind: 'keeper', x: 0, y: 5 }], [{ kind: 'thistle', x: 5, y: 0 }]);
+    expect(playerHasMove(s)).toBe(true);
   });
 
   it('the whole side plays its best move: a capture is telegraphed over a drift, even from a "not its turn" enemy', () => {

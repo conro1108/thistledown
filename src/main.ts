@@ -1,6 +1,6 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
-import { createFight, enemies, playerMove, promote, resolveEnemyTurn, type PromotionKind } from './game/fight';
+import { createFight, enemies, playerHasMove, playerMove, promote, resolveEnemyTurn, type PromotionKind } from './game/fight';
 import {
   afterFightWon,
   buildFightConfig,
@@ -141,6 +141,18 @@ function beginFight() {
   requestAnimationFrame(sizeCanvas);
   hintEl.textContent = DEFAULT_HINT;
   refreshHud();
+  maybeAutoWait();
+}
+
+/**
+ * Stalemate guard: if nobody can move, say so loudly and let the bramble
+ * take its turn rather than soft-locking the fight.
+ */
+function maybeAutoWait() {
+  if (!fight || fight.status !== 'playing' || phase !== 'player') return;
+  if (playerHasMove(fight)) return;
+  hintEl.textContent = 'Everyone is hemmed in — nowhere to step! Hold tight…';
+  setTimeout(beginEnemyTurn, 900);
 }
 
 function endOfFight() {
@@ -391,6 +403,7 @@ function beginEnemyTurn() {
         if (fight!.status === 'playing') hintEl.textContent = blockedNote ?? DEFAULT_HINT;
         refreshHud();
         if (fight!.status !== 'playing') setTimeout(endOfFight, 350);
+        else maybeAutoWait();
       },
       tweens.length ? TWEEN_MS : 60,
     );

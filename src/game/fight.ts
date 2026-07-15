@@ -94,6 +94,14 @@ export function promote(s: FightState, kind: PromotionKind): boolean {
 }
 
 /**
+ * Stalemate guard: true if any friend has at least one legal move. When
+ * false, the UI lets the turn pass (a "wait") instead of soft-locking.
+ */
+export function playerHasMove(s: FightState): boolean {
+  return s.pieces.some((p) => p.side === 'friend' && movesFor(s, p).length > 0);
+}
+
+/**
  * Resolve the enemy telegraphs into real moves, then set up the next round's
  * telegraphs. Split out from playerMove so the UI can show "your move
  * landed" and "the bramble's move" as two distinct, watchable beats.
