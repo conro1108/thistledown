@@ -25,31 +25,13 @@ export interface View {
 
 const GRASS_A = '#8fbf6a';
 const GRASS_B = '#83b45f';
-// No yellow here on purpose: #ffd966 means "your move" and nothing else.
-const FLOWER = ['#f2f0e4', '#f0b0c0', '#c4d8f0'];
-
-function hash(x: number, y: number, salt: number): number {
-  let h = (x * 374761393 + y * 668265263 + salt * 987643211) >>> 0;
-  h = (h ^ (h >> 13)) >>> 0;
-  return (Math.imul(h, 1274126177) >>> 0) % 1000;
-}
 
 export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time: number) {
-  const salt = s.name.length + s.w;
-
-  // ground
+  // ground — plain grass for now; decorate later
   for (let y = 0; y < s.h; y++) {
     for (let x = 0; x < s.w; x++) {
       ctx.fillStyle = (x + y) % 2 === 0 ? GRASS_A : GRASS_B;
       ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-      const r = hash(x, y, salt);
-      if (r < 90) {
-        ctx.fillStyle = FLOWER[r % FLOWER.length];
-        const fx = x * TILE + 3 + (r % 9);
-        const fy = y * TILE + 3 + ((r >> 3) % 9);
-        ctx.fillRect(fx, fy, 1, 1);
-        ctx.fillRect(fx - 1, fy + 1, 1, 1);
-      }
     }
   }
 
