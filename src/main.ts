@@ -2,7 +2,7 @@ import './style.css';
 import { movesFor, pieceAt } from './game/board';
 import { enemies, type PromotionKind } from './game/fight';
 import { FIGHTS, KIND_INFO, TRINKETS, type RunState } from './game/run';
-import { apply, newSession, replay, type LogEntry, type Session } from './game/session';
+import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
@@ -163,6 +163,14 @@ function startRun() {
   stageUi();
 }
 
+/** Rewind to the top of the clearing that just went wrong and try it again. */
+function retryClearing() {
+  if (!sess) return;
+  sess = retryFight(sess);
+  persist();
+  stageUi();
+}
+
 /** Show whatever screen the session's stage calls for. */
 function stageUi() {
   if (!sess) return;
@@ -306,8 +314,15 @@ function endOfRunUi() {
   if (run.status === 'lost') {
     showOverlay(
       'The lantern goes out',
-      `The brambles got the Keeper in ${fight?.name ?? 'the meadow'}. Everyone walks home for tea and tries again tomorrow.`,
-      [{ label: 'Try again', fn: startRun }],
+      `The brambles got the Keeper in ${fight?.name ?? 'the meadow'}. Everyone walks home for tea.`,
+      [
+        {
+          label: 'Retry this clearing',
+          sub: 'Back to the start of this fight — same friends, same meadow.',
+          fn: retryClearing,
+        },
+        { label: 'Start over', sub: 'A whole new meadow from the top.', fn: startRun },
+      ],
     );
     return;
   }

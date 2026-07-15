@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { movesFor } from './board';
-import { apply, newSession, replay, type Session } from './session';
+import { movesFor, pieceAt } from './board';
+import { apply, newSession, replay, retryFight, type Session } from './session';
 
 /**
  * A deterministic headless player: always the first legal move of the first
@@ -86,5 +86,45 @@ describe('session', () => {
     apply(s, { t: 'begin' });
     expect(apply(s, { t: 'move', id: 1, to: { x: 0, y: 0 } })).toBe(false);
     expect(s.log).toHaveLength(1);
+  });
+
+  it('retrying a lost clearing rewinds to that fight, not the start of the run', () => {
+    // The idle bot never wins a fight; a capture-seeking one clears them, so we
+    // can get genuinely several clearings deep before exercising the retry.
+    const grab = (s: Session): boolean => {
+      const f = s.fight!;
+      if (s.resolveDue) return apply(s, { t: 'resolve' });
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        for (const m of movesFor(f, p)) {
+          const occ = pieceAt(f, m.x, m.y);
+          if (occ?.side === 'bramble' && occ.kind !== 'heart') return apply(s, { t: 'move', id: p.id, to: m });
+        }
+      }
+      return botTurn(s); // no capture on offer — fall back to the idle driver
+    };
+    const drive = (s: Session) => (s.stage === 'fight' ? grab(s) : botTurn(s));
+
+    // get past the first clearing so a retry has real history behind it
+    const live = newSession(7);
+    for (let i = 0; i < 600 && live.run.fightIndex < 1; i++) expect(drive(live)).toBe(true);
+    expect(live.run.fightIndex).toBeGreaterThanOrEqual(1); // genuinely a clearing deep
+
+    // sit at the top of the current fight and snapshot the clean start
+    while (live.stage !== 'fight') expect(drive(live)).toBe(true);
+    const fightIndex = live.run.fightIndex;
+    const companions = live.run.companions.length;
+    const cleanStart = snap(live);
+
+    // blunder a few moves into it, then bail out and retry
+    for (let i = 0; i < 4 && live.stage === 'fight'; i++) drive(live);
+    const retried = retryFight(live);
+
+    expect(retried.run.fightIndex).toBe(fightIndex); // same clearing, not back to 0
+    expect(retried.run.companions.length).toBe(companions); // roster carried in, not the newRun three
+    expect(retried.stage).toBe('fight');
+    expect(retried.resolveDue).toBe(false);
+    expect(retried.log.at(-1)!.t).toBe('begin'); // parked at the top of the fight
+    expect(snap(retried)).toEqual(cleanStart); // the exact board you first walked into
   });
 });

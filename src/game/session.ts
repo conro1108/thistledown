@@ -95,6 +95,19 @@ export function replay(seed: number, log: LogEntry[]): Session {
   return s;
 }
 
+/**
+ * Rewind to the top of the current clearing's fight: drop every decision since
+ * the last 'begin' and replay. Roster, trinkets, and RNG all return to exactly
+ * what they were walking in — a clean second attempt, not a whole new run.
+ * Returns the session unchanged if no fight has started yet.
+ */
+export function retryFight(s: Session): Session {
+  let i = s.log.length - 1;
+  while (i >= 0 && s.log[i].t !== 'begin') i--;
+  if (i < 0) return s;
+  return replay(s.run.seed, s.log.slice(0, i + 1)); // keep 'begin' → land straight in a fresh fight
+}
+
 function step(s: Session, e: LogEntry): boolean {
   switch (e.t) {
     case 'begin': {
