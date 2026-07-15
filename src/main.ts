@@ -135,7 +135,7 @@ function fightIntro() {
   const spec = FIGHTS[run.fightIndex];
   showOverlay(
     `Clearing ${run.fightIndex + 1}: ${spec.name}`,
-    `${spec.intro}<span class="objective">🌼 ${OBJECTIVE}</span>`,
+    `${spec.intro}<span class="objective">🌼 ${spec.objective ?? OBJECTIVE}</span>`,
     [{ label: 'Onward', fn: beginFight }],
   );
 }
@@ -199,7 +199,7 @@ function endOfFight() {
     const friends = run.companions.filter((c) => !c.shaken).length;
     showOverlay(
       'The meadow is quiet 🌼',
-      'The Gloom pops into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
+      'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
         `You won the whole thing — ${FIGHTS.length} clearings taken back, ` +
         `and ${friends + 1} of you walking home for tea.`,
       [{ label: 'New run', fn: startRun }],
@@ -374,11 +374,14 @@ function refreshHud() {
   if (!run || !fight) return;
   hudName.textContent = `${fight.name} (${run.fightIndex + 1}/${FIGHTS.length})`;
   hudTurn.textContent = phaseLabel();
-  const left = enemies(fight).length;
+  const heart = fight.pieces.find((p) => p.kind === 'heart');
+  const left = enemies(fight).length - (heart ? 1 : 0);
   goalEl.textContent =
     fight.status === 'won'
       ? 'Clearing won! 🌼'
-      : `${OBJECTIVE} 🌿 ${left} left`;
+      : heart
+        ? `Corner the Bramble Heart — nowhere safe to step!${left ? ` 🌿 ${left} guards` : ''}`
+        : `${OBJECTIVE} 🌿 ${left} left`;
   phaseFlagEl.textContent = phase === 'enemy' ? "🌱 the bramble's move" : '';
   phaseFlagEl.classList.toggle('show', phase === 'enemy' && fight.status === 'playing');
   trinketsEl.innerHTML = '';
@@ -585,6 +588,8 @@ function drainEvents() {
     if (ev.type === 'blocked') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       blockedNote = `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`;
+    } else if (ev.type === 'cornered') {
+      fx.push({ at: ev.at, kind: 'poof', t: 0 });
     } else if (ev.type === 'cloaked') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
       blockedNote = `The Dandelion Cloak whisks ${

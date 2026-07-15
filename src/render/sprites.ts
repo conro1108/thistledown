@@ -200,6 +200,23 @@ export const SPRITES: Record<Kind, Sprite> = {
       '............',
     ],
   },
+  heart: {
+    colors: { p: '#4a2b5e', v: '#7a4a9e', k: '#241533', w: '#c9a0e8', t: '#3a5a35' },
+    rows: [
+      '.t........t.',
+      '.pp.t..t.pp.',
+      'ppvptpptpvpp',
+      'pvvvpvvpvvvp',
+      'pvkvvvvvvkvp',
+      'pvvvvvwvvvvp',
+      '.pvvvwvvvvp.',
+      '.pvvvvvvvvp.',
+      '..pvvvvvvp..',
+      '...pvvvvp...',
+      '....pvvp....',
+      '.....pp.....',
+    ],
+  },
 };
 
 export function drawSprite(ctx: CanvasRenderingContext2D, kind: Kind, px: number, py: number) {

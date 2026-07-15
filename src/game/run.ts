@@ -66,11 +66,17 @@ export const KIND_INFO: Record<Kind, { title: string; blurb: string }> = {
     title: 'The Gloom',
     blurb: 'Any direction, any distance. Do not let it see the Keeper.',
   },
+  heart: {
+    title: 'Bramble Heart',
+    blurb: 'One heavy step, any direction. It can’t be caught — pen it in until it has nowhere safe to step.',
+  },
 };
 
-interface FightSpec {
+export interface FightSpec {
   name: string;
   intro: string;
+  /** overrides the default catch-them-all goal line */
+  objective?: string;
   w: number;
   h: number;
   acts: number;
@@ -136,6 +142,22 @@ export const FIGHTS: FightSpec[] = [
     acts: 3,
     enemies: [
       e('gloom', 4, 0),
+      e('golem', 1, 0),
+      e('creeper', 6, 0),
+      e('thistle', 2, 1),
+      e('thistle', 5, 1),
+    ],
+  },
+  {
+    name: 'The Bramble Heart',
+    intro:
+      'The heart of it all. It cannot be caught — no paw lands on it. Hem it in, friends covering every path, until it has nowhere safe to step.',
+    objective: 'Corner the Bramble Heart — leave it nowhere safe to step.',
+    w: 8,
+    h: 8,
+    acts: 2,
+    enemies: [
+      e('heart', 4, 0),
       e('golem', 1, 0),
       e('creeper', 6, 0),
       e('thistle', 2, 1),

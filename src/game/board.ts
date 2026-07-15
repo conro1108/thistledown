@@ -42,7 +42,16 @@ const MOVERS: Record<Kind, Mover> = {
   creeper: { slides: DIAG },
   golem: { slides: ORTHO },
   gloom: { slides: ALL8 },
+  heart: { steps: ALL8 },
 };
+
+/**
+ * Whether p may land on (capture) occ. The Bramble Heart can never be landed
+ * on — it is beaten by cornering, not capture.
+ */
+function canLand(p: Piece, occ: Piece): boolean {
+  return occ.side !== p.side && occ.kind !== 'heart';
+}
 
 export function inBounds(s: FightState, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < s.w && y < s.h;
@@ -89,7 +98,7 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
         out.push({ x, y });
       } else {
         const occ = pieceAt(s, x, y);
-        if (occ && occ.side !== p.side) out.push({ x, y });
+        if (occ && canLand(p, occ)) out.push({ x, y });
       }
     }
     return dedup(out);
@@ -101,7 +110,7 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
       const y = p.y + d.y;
       if (!inBounds(s, x, y)) continue;
       const occ = pieceAt(s, x, y);
-      if (threats || !occ || occ.side !== p.side) out.push({ x, y });
+      if (threats || !occ || canLand(p, occ)) out.push({ x, y });
     }
   }
 
@@ -112,7 +121,7 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
       while (inBounds(s, x, y)) {
         const occ = pieceAt(s, x, y);
         if (occ) {
-          if (threats || occ.side !== p.side) out.push({ x, y });
+          if (threats || canLand(p, occ)) out.push({ x, y });
           break;
         }
         out.push({ x, y });

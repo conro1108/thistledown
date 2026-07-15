@@ -85,6 +85,19 @@ describe('movement', () => {
     expect(threats.length).toBe(2);
   });
 
+  it('the Bramble Heart cannot be landed on; sliders stop short of it', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 2, y: 5 }, { kind: 'rumble', x: 2, y: 3 }],
+      [{ kind: 'heart', x: 2, y: 0 }],
+    );
+    const moves = movesFor(s, at(s, 2, 3));
+    expect(has(moves, 2, 1)).toBe(true); // may pull right up next to it
+    expect(has(moves, 2, 0)).toBe(false); // but never onto it
+    expect(has(movesFor(s, at(s, 2, 5)), 2, 0)).toBe(false);
+    // its square still counts as covered — that's how cornering is measured
+    expect(has(threatsFor(s, at(s, 2, 3)), 2, 0)).toBe(true);
+  });
+
   it('keeper steps one square, clipped to the board', () => {
     const s = fight([{ kind: 'keeper', x: 0, y: 0 }], [{ kind: 'thistle', x: 4, y: 4 }]);
     expect(movesFor(s, at(s, 0, 0))).toHaveLength(3);

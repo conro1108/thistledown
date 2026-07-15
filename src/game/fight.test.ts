@@ -120,6 +120,64 @@ describe('fight loop', () => {
     expect(s.pieces.find((p) => p.kind === 'hopper')!.spry).toBe(true);
   });
 
+  it('cornering the Bramble Heart wins: covered square + no safe step', () => {
+    // rumbles cover column 0 (incl. the heart), column 1, and row 1 — every
+    // square the heart stands on or could step to is threatened.
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 0, y: 3 },
+        { kind: 'rumble', x: 1, y: 3 },
+        { kind: 'rumble', x: 3, y: 1 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    expect(playerMove(s, idAt(s, 3, 3), { x: 2, y: 3 })).toBe(true);
+    expect(s.status).toBe('won');
+    expect(s.events.some((ev) => ev.type === 'cornered')).toBe(true);
+    expect(s.pieces.some((p) => p.kind === 'heart')).toBe(false); // poofed
+  });
+
+  it('a heart with a safe square is not cornered', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 0, y: 3 }, // column 0 only
+        { kind: 'rumble', x: 3, y: 1 }, // row 1 only
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    // (1,0) is uncovered — the heart can still slip out
+    playerMove(s, idAt(s, 3, 3), { x: 2, y: 3 });
+    expect(s.status).toBe('playing');
+  });
+
+  it('the heart avoids threatened squares, standing still if nowhere is safe', () => {
+    // every escape square is covered but its own square is safe: it stays put
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 1, y: 3 }, // covers (1,0) and (1,1)
+        { kind: 'rumble', x: 3, y: 1 }, // covers (0,1) and (1,1)
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    expect(s.telegraphs.some((t) => t.pieceId === idAt(s, 0, 0))).toBe(false);
+    playerMove(s, idAt(s, 3, 3), { x: 2, y: 2 });
+    resolveEnemyTurn(s);
+    expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 0, y: 0 });
+    expect(s.status).toBe('playing');
+  });
+
   it('playerHasMove detects a hemmed-in band (stalemate guard)', () => {
     // 1-wide corridor: keeper boxed by his own sprout, sprout blocked head-on
     // by a thistle it can't capture forward. Nobody on either side can move.

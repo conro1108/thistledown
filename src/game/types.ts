@@ -14,7 +14,8 @@ export type Kind =
   | 'tumbleweed'
   | 'creeper'
   | 'golem'
-  | 'gloom';
+  | 'gloom'
+  | 'heart';
 
 export type Side = 'friend' | 'bramble';
 
@@ -37,7 +38,7 @@ export interface Telegraph {
 export type Rng = () => number;
 
 export interface FightEvent {
-  type: 'capture' | 'shaken' | 'blocked' | 'cloaked';
+  type: 'capture' | 'shaken' | 'blocked' | 'cloaked' | 'cornered';
   at: Vec;
   kind: Kind;
 }

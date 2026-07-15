@@ -1,4 +1,4 @@
-import { movesFor, pieceAt } from './board';
+import { movesFor, pieceAt, threatsFor } from './board';
 import type { FightState, Kind, Piece, Rng, Vec } from './types';
 
 export interface Spawn {
@@ -80,6 +80,7 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
     s.status = 'won';
     return true;
   }
+  if (settleCornered(s)) return true;
 
   if (p.kind === 'sprout' && p.y === 0) {
     s.pendingPromotion = p.id;
@@ -99,6 +100,7 @@ export function promote(s: FightState, kind: PromotionKind): boolean {
   if (!p) return false;
   p.kind = kind;
   if (kind === 'hopper' && s.whistle) p.spry = true; // the Acorn Whistle greets them
+  settleCornered(s); // fresh threats might complete the net
   return true;
 }
 
@@ -129,8 +131,45 @@ export function resolveEnemyTurn(s: FightState) {
   if (s.status !== 'playing' || s.pendingPromotion != null) return;
   resolveTelegraphs(s);
   if (s.status !== 'playing') return;
+  // a minion can wall off the heart's last free escape mid-turn
+  if (settleCornered(s)) return;
   s.turn++;
   assignTelegraphs(s);
+}
+
+// ---------- the Bramble Heart ----------
+
+/** Every square the friend side covers (threatens or defends). */
+function friendCover(s: FightState): Set<number> {
+  const set = new Set<number>();
+  for (const p of s.pieces) {
+    if (p.side !== 'friend') continue;
+    for (const t of threatsFor(s, p)) set.add(t.y * 64 + t.x);
+  }
+  return set;
+}
+
+/**
+ * The boss rule (checkmate, never named): the Heart is beaten when the
+ * square it stands on is covered and every square it could step to is too.
+ */
+export function heartCornered(s: FightState): boolean {
+  const h = s.pieces.find((p) => p.kind === 'heart');
+  if (!h) return false;
+  const cover = friendCover(s);
+  if (!cover.has(h.y * 64 + h.x)) return false;
+  return movesFor(s, h).every((m) => cover.has(m.y * 64 + m.x));
+}
+
+/** If the heart is cornered, it bursts into flowers and the fight is won. */
+function settleCornered(s: FightState): boolean {
+  if (s.status !== 'playing' || !heartCornered(s)) return false;
+  const h = s.pieces.find((p) => p.kind === 'heart')!;
+  s.pieces = s.pieces.filter((p) => p.id !== h.id);
+  s.telegraphs = s.telegraphs.filter((t) => t.pieceId !== h.id);
+  s.events.push({ type: 'cornered', at: { x: h.x, y: h.y }, kind: 'heart' });
+  s.status = 'won';
+  return true;
 }
 
 /**
@@ -202,10 +241,15 @@ function assignTelegraphs(s: FightState) {
   }
 }
 
-/** Prefer capturing the keeper, then any friend, else drift toward the keeper. */
+/**
+ * Prefer capturing the keeper, then any friend, else drift toward the keeper.
+ * The Heart also dreads covered squares and would rather stand still than
+ * step into danger — that's what makes penning it in a real hunt.
+ */
 function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score: number } {
   const opts = movesFor(s, e);
   if (opts.length === 0) return { id: e.id, to: null, score: -Infinity };
+  const dread = e.kind === 'heart' ? friendCover(s) : null;
   const k = keeper(s);
   let best: Vec | null = null;
   let bestScore = -Infinity;
@@ -214,11 +258,15 @@ function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score:
     let score = 0;
     if (occ) score = occ.kind === 'keeper' ? 1000 : 100;
     else if (k) score = -(Math.abs(o.x - k.x) + Math.abs(o.y - k.y));
+    if (dread?.has(o.y * 64 + o.x)) score -= 500;
     score += s.rng() * 0.5; // shuffle ties so drift isn't robotic
     if (score > bestScore) {
       bestScore = score;
       best = o;
     }
+  }
+  if (dread && best && dread.has(best.y * 64 + best.x) && !dread.has(e.y * 64 + e.x)) {
+    return { id: e.id, to: null, score: -Infinity }; // safer right here — don't move
   }
   return { id: e.id, to: best, score: bestScore };
 }
