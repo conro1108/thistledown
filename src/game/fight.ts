@@ -174,16 +174,24 @@ function settleCornered(s: FightState): boolean {
 
 /**
  * Each telegraph re-checks legality at resolve time. Blocking a thistle
- * head-on genuinely stops it — pawns can't capture forward.
+ * head-on genuinely stops it — pawns can't capture forward. But a slider
+ * whose committed square is walled off still lunges at the first critter that
+ * stepped into its lane: interposing a capturable piece costs you that piece,
+ * it isn't a free block.
  */
 function resolveTelegraphs(s: FightState) {
   for (const t of s.telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e || !t.to) continue;
-    const to = t.to;
-    if (!movesFor(s, e).some((m) => m.x === to.x && m.y === to.y)) {
-      s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
-      continue;
+    const legal = movesFor(s, e);
+    let to = t.to;
+    if (!legal.some((m) => m.x === to.x && m.y === to.y)) {
+      const cut = interposer(s, e, t.to, legal);
+      if (!cut) {
+        s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
+        continue;
+      }
+      to = cut; // the slider stops on — and takes — whatever cut it off
     }
     const occ = pieceAt(s, to.x, to.y);
     if (occ && occ.side === 'friend') {
@@ -212,6 +220,31 @@ function resolveTelegraphs(s: FightState) {
     e.y = to.y;
   }
   s.telegraphs = [];
+}
+
+/**
+ * When a slider's committed square is unreachable, the friend it stops on: the
+ * nearest one along the committed ray that it can legally take. Straight lines
+ * only — a leaper can't be interposed at all, and a pawn's forward push isn't a
+ * capture, so neither yields an interposer (both stay genuinely blocked).
+ */
+function interposer(s: FightState, e: Piece, aim: Vec, legal: Vec[]): Vec | null {
+  const dx = Math.sign(aim.x - e.x);
+  const dy = Math.sign(aim.y - e.y);
+  const straight = dx === 0 || dy === 0 || Math.abs(aim.x - e.x) === Math.abs(aim.y - e.y);
+  if (!straight) return null;
+  let x = e.x + dx;
+  let y = e.y + dy;
+  for (;;) {
+    const occ = pieceAt(s, x, y);
+    if (occ) {
+      // first blocker: take it only if it's a friend this piece can actually land on
+      return occ.side === 'friend' && legal.some((m) => m.x === x && m.y === y) ? { x, y } : null;
+    }
+    if (x === aim.x && y === aim.y) return null; // reached the aim with nothing to hit
+    x += dx;
+    y += dy;
+  }
 }
 
 /** First free square on the friends' home row (skipping where the enemy lands). */

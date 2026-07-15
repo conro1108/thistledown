@@ -264,6 +264,28 @@ describe('fight loop', () => {
     expect(s.telegraphs).toHaveLength(0);
   });
 
+  it("interposing into a slider's lane costs you the piece — it takes the blocker, not a free block", () => {
+    // creeper (diagonal slider) at (1,1) aims down-right at the sprout on (4,4)
+    const s = fight(
+      [
+        { kind: 'keeper', x: 0, y: 5 },
+        { kind: 'sprout', x: 4, y: 4 },
+        { kind: 'hopper', x: 0, y: 1 }, // off every creeper diagonal, so it isn't a rival target
+      ],
+      [{ kind: 'creeper', x: 1, y: 1 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+    playerMove(s, idAt(s, 0, 1), { x: 2, y: 2 }); // hop squarely into the creeper's lane
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect(creeper.x).toBe(2);
+    expect(creeper.y).toBe(2); // it lunged onto the interposer
+    expect(s.pieces.find((p) => p.kind === 'hopper')).toBeUndefined(); // and took it
+    expect(s.pieces.find((p) => p.kind === 'sprout')).toBeDefined(); // the original target survives
+    expect(s.events.some((ev) => ev.type === 'shaken' && ev.kind === 'hopper')).toBe(true);
+    expect(s.events.some((ev) => ev.type === 'blocked')).toBe(false);
+  });
+
   it('a hopper can capture a golem sitting on the back rank', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 2, y: 2 }],
