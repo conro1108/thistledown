@@ -25,7 +25,8 @@ export interface View {
 
 const GRASS_A = '#8fbf6a';
 const GRASS_B = '#83b45f';
-const FLOWER = ['#f2f0e4', '#f0b0c0', '#ffd966'];
+// No yellow here on purpose: #ffd966 means "your move" and nothing else.
+const FLOWER = ['#f2f0e4', '#f0b0c0', '#c4d8f0'];
 
 function hash(x: number, y: number, salt: number): number {
   let h = (x * 374761393 + y * 668265263 + salt * 987643211) >>> 0;
