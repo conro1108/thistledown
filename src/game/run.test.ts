@@ -8,7 +8,9 @@ import {
   FIGHTS,
   newRun,
   offerRecruits,
+  offerTrinkets,
   recruit,
+  takeTrinket,
 } from './run';
 
 describe('run', () => {
@@ -69,6 +71,22 @@ describe('run', () => {
     const { cfg, lineup } = buildFightConfig(run);
     const j = lineup.indexOf(2);
     expect(cfg.friends[j + 1].spry).toBe(true);
+  });
+
+  it('trinkets: offers exclude owned ones and the whistle makes fielded hoppers spry', () => {
+    const run = newRun(11);
+    const offered = offerTrinkets(run, 2);
+    expect(new Set(offered).size).toBe(2);
+    takeTrinket(run, 'whistle');
+    expect(offerTrinkets(run, 3).includes('whistle')).toBe(false);
+    const { cfg, lineup } = buildFightConfig(run);
+    const hopperIdx = run.companions.findIndex((c) => c.kind === 'hopper');
+    expect(cfg.friends[lineup.indexOf(hopperIdx) + 1].spry).toBe(true);
+    takeTrinket(run, 'cloak');
+    takeTrinket(run, 'breakfast');
+    const next = buildFightConfig(run).cfg;
+    expect(next.cloak).toBe(true);
+    expect(next.secondBreakfast).toBe(true);
   });
 
   it('winning the last fight wins the run', () => {

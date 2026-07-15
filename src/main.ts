@@ -1,6 +1,15 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
-import { createFight, enemies, playerHasMove, playerMove, promote, resolveEnemyTurn, type PromotionKind } from './game/fight';
+import {
+  createFight,
+  enemies,
+  playerHasMove,
+  playerMove,
+  promote,
+  resolveEnemyTurn,
+  takeFreeMove,
+  type PromotionKind,
+} from './game/fight';
 import {
   afterFightWon,
   buildFightConfig,
@@ -11,9 +20,13 @@ import {
   KIND_INFO,
   newRun,
   offerRecruits,
+  offerTrinkets,
   recruit,
   ROSTER_CAP,
+  takeTrinket,
+  TRINKETS,
   type RunState,
+  type TrinketId,
 } from './game/run';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
@@ -28,7 +41,7 @@ const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
-    <div id="hud-row"><span id="fightname">Overgrown</span><span id="turn"></span></div>
+    <div id="hud-row"><span id="fightname">Overgrown</span><span id="trinkets"></span><span id="turn"></span></div>
     <div id="goal"></div>
     <div id="legend">
       <span><i class="sw go"></i>your moves</span>
@@ -54,6 +67,7 @@ const boardAreaEl = document.querySelector<HTMLDivElement>('#board-area')!;
 const hudName = document.querySelector<HTMLSpanElement>('#fightname')!;
 const hudTurn = document.querySelector<HTMLSpanElement>('#turn')!;
 const goalEl = document.querySelector<HTMLDivElement>('#goal')!;
+const trinketsEl = document.querySelector<HTMLSpanElement>('#trinkets')!;
 const phaseFlagEl = document.querySelector<HTMLDivElement>('#phaseflag')!;
 const hintEl = document.querySelector<HTMLDivElement>('#hint')!;
 const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
@@ -224,10 +238,30 @@ function endOfFight() {
   );
 }
 
-/** Between fights: sometimes there's a campfire on the way. */
+/** Between fights: a find in the grass after the first clearing, campfires later. */
 function nextStop() {
-  if (run && campDue(run)) campStop();
+  if (!run) return;
+  if (run.fightIndex === 1) trinketFound();
+  else if (campDue(run)) campStop();
   else fightIntro();
+}
+
+function trinketFound() {
+  if (!run) return;
+  const offers = offerTrinkets(run, 2);
+  if (!offers.length) return fightIntro();
+  showOverlay(
+    'Something glints in the grass ✨',
+    'Half-buried by the path. It hums a little. You can only carry one more thing.',
+    offers.map((id) => ({
+      label: `${TRINKETS[id].icon} ${TRINKETS[id].title}`,
+      sub: TRINKETS[id].blurb,
+      fn: () => {
+        takeTrinket(run!, id);
+        fightIntro();
+      },
+    })),
+  );
 }
 
 function campStop() {
@@ -252,6 +286,18 @@ function campStop() {
       label: 'Honeycake 🍯',
       sub: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
       fn: honeycakeChoice,
+    });
+  }
+  const found = offerTrinkets(run, 1);
+  if (found.length) {
+    const id: TrinketId = found[0];
+    choices.push({
+      label: `${TRINKETS[id].icon} Take the ${TRINKETS[id].title}`,
+      sub: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
+      fn: () => {
+        takeTrinket(run!, id);
+        fightIntro();
+      },
     });
   }
   choices.push({ label: 'Rest quietly', sub: 'Just the crackle of the fire.', fn: fightIntro });
@@ -309,7 +355,7 @@ function promotionChoice() {
         promote(fight!, kind);
         drainEvents();
         refreshHud();
-        beginEnemyTurn();
+        proceedAfterPlayerAction();
       },
     })),
   );
@@ -335,6 +381,13 @@ function refreshHud() {
       : `${OBJECTIVE} 🌿 ${left} left`;
   phaseFlagEl.textContent = phase === 'enemy' ? "🌱 the bramble's move" : '';
   phaseFlagEl.classList.toggle('show', phase === 'enemy' && fight.status === 'playing');
+  trinketsEl.innerHTML = '';
+  for (const id of run.trinkets) {
+    const t = document.createElement('span');
+    t.textContent = TRINKETS[id].icon;
+    t.title = `${TRINKETS[id].title} — ${TRINKETS[id].blurb}`;
+    trinketsEl.append(t);
+  }
   renderRoster();
 }
 
@@ -407,12 +460,25 @@ function attemptMove(pieceId: number, to: Vec) {
   inspect = null;
   drainEvents();
   refreshHud();
+  proceedAfterPlayerAction();
+}
+
+/** After any player action settles: promotion first, then win/loss, then a
+ * banked Second Breakfast move, then the bramble's turn. */
+function proceedAfterPlayerAction() {
+  if (!fight) return;
   if (fight.pendingPromotion != null) {
     promotionChoice();
     return;
   }
   if (fight.status !== 'playing') {
     setTimeout(endOfFight, 650);
+    return;
+  }
+  if (takeFreeMove(fight)) {
+    hintEl.textContent = 'Second Breakfast! 🥞 Take one more move.';
+    refreshHud();
+    maybeAutoWait();
     return;
   }
   beginEnemyTurn();
@@ -519,6 +585,11 @@ function drainEvents() {
     if (ev.type === 'blocked') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       blockedNote = `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`;
+    } else if (ev.type === 'cloaked') {
+      fx.push({ at: ev.at, kind: 'shaken', t: 0 });
+      blockedNote = `The Dandelion Cloak whisks ${
+        ev.kind === 'keeper' ? 'the Keeper' : `the ${KIND_INFO[ev.kind].title}`
+      } safely home! 🧣`;
     } else {
       fx.push({ at: ev.at, kind: ev.type === 'capture' ? 'poof' : 'shaken', t: 0 });
     }

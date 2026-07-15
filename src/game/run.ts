@@ -15,6 +15,7 @@ export interface RunState {
   rng: Rng;
   fightIndex: number;
   companions: Companion[];
+  trinkets: TrinketId[];
   status: 'playing' | 'won' | 'lost';
 }
 
@@ -168,6 +169,7 @@ export function newRun(seed: number): RunState {
       { kind: 'sprout', name: 'Clover', shaken: false },
       { kind: 'hopper', name: 'Biscuit', shaken: false },
     ],
+    trinkets: [],
     status: 'playing',
   };
 }
@@ -198,6 +200,42 @@ export function offerRecruits(run: RunState): Kind[] {
 
 export function recruit(run: RunState, kind: Kind) {
   run.companions.push({ kind, name: makeName(run), shaken: false });
+}
+
+// ---------- trinkets ----------
+
+export type TrinketId = 'cloak' | 'whistle' | 'breakfast';
+
+export const TRINKETS: Record<TrinketId, { title: string; icon: string; blurb: string }> = {
+  cloak: {
+    title: 'Dandelion Cloak',
+    icon: '🧣',
+    blurb: 'Once each clearing, a caught friend drifts safely back to your home row instead.',
+  },
+  whistle: {
+    title: 'Acorn Whistle',
+    icon: '🌰',
+    blurb: 'Every Hopper can also take a plain one-step move, any direction.',
+  },
+  breakfast: {
+    title: 'Second Breakfast',
+    icon: '🥞',
+    blurb: 'Your first move each clearing can be two moves.',
+  },
+};
+
+/** Up to n distinct trinkets the run doesn't own yet. */
+export function offerTrinkets(run: RunState, n: number): TrinketId[] {
+  const pool = (Object.keys(TRINKETS) as TrinketId[]).filter((t) => !run.trinkets.includes(t));
+  const out: TrinketId[] = [];
+  while (out.length < n && pool.length) {
+    out.push(pool.splice(Math.floor(run.rng() * pool.length), 1)[0]);
+  }
+  return out;
+}
+
+export function takeTrinket(run: RunState, id: TrinketId) {
+  if (!run.trinkets.includes(id)) run.trinkets.push(id);
 }
 
 // ---------- camp ----------
@@ -241,7 +279,8 @@ export function buildFightConfig(run: RunState): BuiltFight {
     if (c.shaken || slot >= offsets.length) return;
     const x = cx + offsets[slot++];
     if (x < 0 || x >= spec.w) return;
-    friends.push({ kind: c.kind, x, y: spec.h - 2, spry: c.spry });
+    const whistled = run.trinkets.includes('whistle') && c.kind === 'hopper';
+    friends.push({ kind: c.kind, x, y: spec.h - 2, spry: c.spry || whistled || undefined });
     lineup.push(i);
   });
   return {
@@ -252,6 +291,9 @@ export function buildFightConfig(run: RunState): BuiltFight {
       friends,
       enemies: spec.enemies,
       actsPerTurn: spec.acts,
+      cloak: run.trinkets.includes('cloak'),
+      secondBreakfast: run.trinkets.includes('breakfast'),
+      whistle: run.trinkets.includes('whistle'),
     },
     lineup,
   };

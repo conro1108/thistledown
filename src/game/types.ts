@@ -37,7 +37,7 @@ export interface Telegraph {
 export type Rng = () => number;
 
 export interface FightEvent {
-  type: 'capture' | 'shaken' | 'blocked';
+  type: 'capture' | 'shaken' | 'blocked' | 'cloaked';
   at: Vec;
   kind: Kind;
 }
@@ -56,4 +56,10 @@ export interface FightState {
   events: FightEvent[];
   /** a sprout reached the far edge — the turn is frozen until promote() is called */
   pendingPromotion: number | null;
+  /** Dandelion Cloak charges left this fight */
+  cloakLeft: number;
+  /** Second Breakfast: extra player moves banked for this fight */
+  freeMoves: number;
+  /** Acorn Whistle is along (mid-fight promotions to hopper come out spry) */
+  whistle: boolean;
 }

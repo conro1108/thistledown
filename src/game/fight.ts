@@ -15,6 +15,10 @@ export interface FightConfig {
   friends: Spawn[];
   enemies: Spawn[];
   actsPerTurn: number;
+  /** trinkets along for this fight */
+  cloak?: boolean;
+  secondBreakfast?: boolean;
+  whistle?: boolean;
 }
 
 export function createFight(cfg: FightConfig, rng: Rng): FightState {
@@ -35,6 +39,9 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     rng,
     events: [],
     pendingPromotion: null,
+    cloakLeft: cfg.cloak ? 1 : 0,
+    freeMoves: cfg.secondBreakfast ? 1 : 0,
+    whistle: !!cfg.whistle,
   };
   assignTelegraphs(s);
   return s;
@@ -91,6 +98,17 @@ export function promote(s: FightState, kind: PromotionKind): boolean {
   s.pendingPromotion = null;
   if (!p) return false;
   p.kind = kind;
+  if (kind === 'hopper' && s.whistle) p.spry = true; // the Acorn Whistle greets them
+  return true;
+}
+
+/**
+ * Second Breakfast: spend a banked extra move. The UI calls this after a
+ * player move lands; true means stay in the player phase for one more.
+ */
+export function takeFreeMove(s: FightState): boolean {
+  if (s.status !== 'playing' || s.freeMoves <= 0) return false;
+  s.freeMoves--;
   return true;
 }
 
@@ -130,20 +148,41 @@ function resolveTelegraphs(s: FightState) {
     }
     const occ = pieceAt(s, to.x, to.y);
     if (occ && occ.side === 'friend') {
-      s.pieces = s.pieces.filter((p) => p.id !== occ.id);
-      s.events.push({ type: 'shaken', at: { x: to.x, y: to.y }, kind: occ.kind });
+      const spot = s.cloakLeft > 0 ? cloakSpot(s, to) : null;
+      if (spot) {
+        // Dandelion Cloak: the friend drifts home instead of being caught
+        s.cloakLeft--;
+        occ.x = spot.x;
+        occ.y = spot.y;
+        s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind });
+      } else {
+        s.pieces = s.pieces.filter((p) => p.id !== occ.id);
+        s.events.push({ type: 'shaken', at: { x: to.x, y: to.y }, kind: occ.kind });
+        if (occ.kind === 'keeper') {
+          e.x = to.x;
+          e.y = to.y;
+          s.status = 'lost';
+          return;
+        }
+      }
       e.x = to.x;
       e.y = to.y;
-      if (occ.kind === 'keeper') {
-        s.status = 'lost';
-        return;
-      }
       continue;
     }
     e.x = to.x;
     e.y = to.y;
   }
   s.telegraphs = [];
+}
+
+/** First free square on the friends' home row (skipping where the enemy lands). */
+function cloakSpot(s: FightState, landing: Vec): Vec | null {
+  const y = s.h - 1;
+  for (let x = 0; x < s.w; x++) {
+    if (landing.x === x && landing.y === y) continue;
+    if (!pieceAt(s, x, y)) return { x, y };
+  }
+  return null;
 }
 
 function assignTelegraphs(s: FightState) {

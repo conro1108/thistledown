@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { createFight, playerHasMove, playerMove, promote, resolveEnemyTurn, type Spawn } from './fight';
+import {
+  createFight,
+  playerHasMove,
+  playerMove,
+  promote,
+  resolveEnemyTurn,
+  takeFreeMove,
+  type FightConfig,
+  type Spawn,
+} from './fight';
 import { mulberry32 } from './rng';
 import type { FightState } from './types';
 
-function fight(friends: Spawn[], enemies: Spawn[], actsPerTurn = 1, w = 6, h = 6): FightState {
-  return createFight({ name: 't', w, h, friends, enemies, actsPerTurn }, mulberry32(7));
+function fight(
+  friends: Spawn[],
+  enemies: Spawn[],
+  actsPerTurn = 1,
+  w = 6,
+  h = 6,
+  extra: Partial<FightConfig> = {},
+): FightState {
+  return createFight({ name: 't', w, h, friends, enemies, actsPerTurn, ...extra }, mulberry32(7));
 }
 
 function idAt(s: FightState, x: number, y: number): number {
@@ -35,6 +51,73 @@ describe('fight loop', () => {
       2,
     );
     expect(s.telegraphs).toHaveLength(2);
+  });
+
+  it('Dandelion Cloak: the first caught friend retreats to the home row instead', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+      1,
+      6,
+      6,
+      { cloak: true },
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+    playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 });
+    resolveEnemyTurn(s);
+    const sprout = s.pieces.find((p) => p.kind === 'sprout')!;
+    expect(sprout.y).toBe(5); // whisked to the home row
+    expect(s.cloakLeft).toBe(0);
+    expect(s.events.some((ev) => ev.type === 'cloaked')).toBe(true);
+    expect(s.events.some((ev) => ev.type === 'shaken')).toBe(false);
+    // the thistle still lands where it was headed
+    expect(s.pieces.find((p) => p.kind === 'thistle')).toMatchObject({ x: 4, y: 4 });
+  });
+
+  it('Dandelion Cloak saves the keeper from a run-ending capture — once', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 4, y: 4 }, { kind: 'sprout', x: 0, y: 4 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+      1,
+      6,
+      6,
+      { cloak: true },
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+    playerMove(s, idAt(s, 0, 4), { x: 0, y: 3 });
+    resolveEnemyTurn(s);
+    expect(s.status).toBe('playing');
+    expect(s.pieces.find((p) => p.kind === 'keeper')!.y).toBe(5);
+  });
+
+  it('Second Breakfast: takeFreeMove grants exactly one extra move', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }],
+      [{ kind: 'thistle', x: 5, y: 0 }],
+      1,
+      6,
+      6,
+      { secondBreakfast: true },
+    );
+    expect(takeFreeMove(s)).toBe(true);
+    expect(takeFreeMove(s)).toBe(false);
+    const plain = fight([{ kind: 'keeper', x: 0, y: 5 }], [{ kind: 'thistle', x: 5, y: 0 }]);
+    expect(takeFreeMove(plain)).toBe(false);
+  });
+
+  it('Acorn Whistle: a sprout promoting into a hopper comes out spry', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 5, y: 1 }],
+      [{ kind: 'thistle', x: 0, y: 0 }],
+      1,
+      6,
+      6,
+      { whistle: true },
+    );
+    playerMove(s, idAt(s, 5, 1), { x: 5, y: 0 });
+    expect(s.pendingPromotion).not.toBeNull();
+    promote(s, 'hopper');
+    expect(s.pieces.find((p) => p.kind === 'hopper')!.spry).toBe(true);
   });
 
   it('playerHasMove detects a hemmed-in band (stalemate guard)', () => {

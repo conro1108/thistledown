@@ -49,6 +49,13 @@ body {
   gap: 12px;
 }
 
+#trinkets {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  font-size: 14px;
+}
+
 #fightname { font-weight: bold; color: var(--accent); font-size: 15px; }
 #turn { color: var(--dim); font-size: 12px; white-space: nowrap; }
 
