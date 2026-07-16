@@ -414,9 +414,19 @@ function landingFor(s: FightState, e: Piece, aim: Vec): Vec | null {
   const legal = movesFor(s, e);
   const aimHit = legal.some((m) => m.x === aim.x && m.y === aim.y) ? aim : null;
   if (isPawn(e.kind)) {
-    if (aimHit) return aimHit;
-    if (aim.x === e.x) return null; // forward push blocked head-on
-    return legal.find((m) => m.x === e.x) ?? null; // dodged diagonal: push forward
+    // A pawn's diagonal bite is a standing threat, not a plan. Whatever it
+    // telegraphed, if a friend is sitting on a forward diagonal now, take it —
+    // a piece that steps into the diagonal steps into the bite. Prefer the
+    // square it aimed at, then the juiciest of any others.
+    const diag = legal.filter((m) => m.x !== e.x); // pawn diagonals are legal only when a friend sits there
+    if (diag.length) {
+      return (
+        diag.find((m) => m.x === aim.x && m.y === aim.y) ??
+        diag.reduce((a, b) => (prize(s, b) > prize(s, a) ? b : a))
+      );
+    }
+    if (aim.x === e.x) return aimHit; // forward push: its square, or null if walled off head-on
+    return legal.find((m) => m.x === e.x) ?? null; // aimed diagonal emptied out: push forward
   }
   const dx = Math.sign(aim.x - e.x);
   const dy = Math.sign(aim.y - e.y);

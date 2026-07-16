@@ -394,6 +394,21 @@ describe('fight loop', () => {
     expect(s.telegraphs).toHaveLength(0);
   });
 
+  it('a thistle telegraphing a forward push still bites a friend that steps onto its diagonal', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'hopper', x: 2, y: 5 }],
+      [{ kind: 'thistle', x: 2, y: 2 }],
+    );
+    // nothing to bite yet, so it telegraphs the straight-ahead push
+    expect(s.telegraphs[0].to).toEqual({ x: 2, y: 3 });
+    playerMove(s, idAt(s, 2, 5), { x: 1, y: 3 }); // hop onto its forward-left diagonal
+    resolveEnemyTurn(s);
+    const thistle = s.pieces.find((p) => p.kind === 'thistle')!;
+    expect(thistle).toMatchObject({ x: 1, y: 3 }); // it took the bite instead of pushing forward
+    expect(s.pieces.find((p) => p.kind === 'hopper')).toBeUndefined();
+    expect(s.events.some((ev) => ev.type === 'shaken')).toBe(true);
+  });
+
   it('a thistle whose diagonal capture target dodges away pushes forward instead of idling', () => {
     const s = fight(
       [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'sprout', x: 3, y: 4 }],
