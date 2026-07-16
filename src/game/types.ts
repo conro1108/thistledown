@@ -37,6 +37,13 @@ export interface Piece {
 export interface Telegraph {
   pieceId: number;
   to: Vec | null;
+  /**
+   * The friend this telegraph is a red *attack* on (the piece sitting on `to`
+   * at telegraph time). A red projection means "I am attacking this piece," not
+   * "I am moving to this square": if the target relocates but stays somewhere
+   * this enemy can still legally capture it, the threat follows it there.
+   */
+  target?: number;
   /** fickle enemies: the committed second option */
   alt?: Vec | null;
   /** shrouded: the renderer draws a question, not an arrow */

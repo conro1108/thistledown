@@ -363,6 +363,47 @@ describe('fight loop', () => {
     expect(s.events.some((ev) => ev.type === 'shaken')).toBe(true);
   });
 
+  it('a red attack tracks its piece: a slider takes a target that sidesteps to another lane it covers', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 4 }, { kind: 'duchess', x: 1, y: 1 }],
+      [{ kind: 'creeper', x: 3, y: 3 }],
+    );
+    // the creeper (diagonal slider) telegraphs the bite on the duchess up-left
+    expect(s.telegraphs[0].to).toEqual({ x: 1, y: 1 });
+    playerMove(s, idAt(s, 1, 1), { x: 5, y: 1 }); // slide onto its OTHER diagonal — still in reach
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect(creeper).toMatchObject({ x: 5, y: 1 }); // it followed the target across lanes
+    expect(s.pieces.find((p) => p.kind === 'duchess')).toBeUndefined();
+    expect(s.events.some((ev) => ev.type === 'shaken')).toBe(true);
+  });
+
+  it('a red attack still misses a target that dodges clear of every square it covers', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 4 }, { kind: 'duchess', x: 1, y: 1 }],
+      [{ kind: 'creeper', x: 3, y: 3 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 1, y: 1 });
+    playerMove(s, idAt(s, 1, 1), { x: 0, y: 1 }); // off every diagonal the creeper covers
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect(creeper).toMatchObject({ x: 1, y: 1 }); // it landed on the empty aimed square
+    expect(s.pieces.find((p) => p.kind === 'duchess')).toBeDefined(); // the dodge worked
+  });
+
+  it('the Heart pursues a piece that steps to another square it attacks (but not behind a defender)', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'hopper', x: 3, y: 3 }],
+      [{ kind: 'heart', x: 2, y: 2 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 3 }); // its bite on the hopper
+    playerMove(s, idAt(s, 3, 3), { x: 1, y: 2 }); // a knight hop to another heart-adjacent square
+    resolveEnemyTurn(s);
+    expect(s.status).toBe('playing');
+    expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 1, y: 2 });
+    expect(s.pieces.find((p) => p.kind === 'hopper')).toBeUndefined();
+  });
+
   it('losing the keeper loses the fight', () => {
     const s = fight(
       [{ kind: 'keeper', x: 4, y: 4 }, { kind: 'sprout', x: 0, y: 4 }],

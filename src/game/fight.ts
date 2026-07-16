@@ -284,10 +284,18 @@ function forcedRescue(s: FightState): Telegraph | null {
     if (score > bestScore) {
       bestScore = score;
       best = { pieceId: piece.id, to };
+      if (victim) best.target = victim.id;
       if (piece.veiled) best.veiled = true;
     }
   }
   return best;
+}
+
+/** The friend a telegraph lands on, if any — the piece a red attack is aimed at. */
+function friendTarget(s: FightState, v: Vec | null): number | undefined {
+  if (!v) return undefined;
+  const occ = pieceAt(s, v.x, v.y);
+  return occ && occ.side === 'friend' ? occ.id : undefined;
 }
 
 /** If the heart is cornered, it bursts into flowers and the fight is won. */
@@ -312,7 +320,7 @@ function resolveTelegraphs(s: FightState) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e) continue;
     if (e.kind === 'heart') {
-      resolveHeart(s, e, t.to);
+      resolveHeart(s, e, t);
       if (s.status !== 'playing') return;
       continue;
     }
@@ -323,6 +331,10 @@ function resolveTelegraphs(s: FightState) {
       const altTo = landingFor(s, e, t.alt);
       if (prize(s, altTo) > prize(s, to)) to = altTo;
     }
+    // a red attack is on a piece, not a square: a target that sidesteps into
+    // another square this enemy can still reach gets taken there anyway
+    const chase = chaseTarget(s, e, t);
+    if (chase) to = chase;
     if (!to) {
       s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
       continue;
@@ -331,6 +343,21 @@ function resolveTelegraphs(s: FightState) {
     if (s.status !== 'playing') return;
   }
   s.telegraphs = [];
+}
+
+/**
+ * A red telegraph attacks a *piece*, not a square. If that piece is still on
+ * the board and this enemy can still legally capture it at wherever it stands
+ * now, return that square — the threat follows a target that only sidestepped
+ * within reach. Null when the target is gone or dodged clear of the attack.
+ */
+function chaseTarget(s: FightState, e: Piece, t: Telegraph): Vec | null {
+  if (t.target == null) return null;
+  const victim = s.pieces.find((p) => p.id === t.target && p.side === 'friend');
+  if (!victim) return null;
+  return movesFor(s, e).some((m) => m.x === victim.x && m.y === victim.y)
+    ? { x: victim.x, y: victim.y }
+    : null;
 }
 
 /** What a landing is worth at resolve time: the friend on it, or mere legality. */
@@ -374,7 +401,7 @@ function land(s: FightState, e: Piece, to: Vec) {
  * it balks instead. (Checked with no way out never reaches here: that's
  * cornered, and settleCornered has already ended the fight.)
  */
-function resolveHeart(s: FightState, h: Piece, aim: Vec | null) {
+function resolveHeart(s: FightState, h: Piece, t: Telegraph) {
   const cover = friendCover(s);
   if (cover.has(h.y * 64 + h.x)) {
     const outs = movesFor(s, h).filter((m) => !cover.has(m.y * 64 + m.x));
@@ -384,8 +411,10 @@ function resolveHeart(s: FightState, h: Piece, aim: Vec | null) {
     land(s, h, to);
     return;
   }
-  if (!aim) return; // dug in on purpose
-  const to = landingFor(s, h, aim);
+  if (!t.to) return; // dug in on purpose
+  // the Heart's bite tracks its target too — but it still never steps onto a
+  // covered square, so a target that dodges behind its own defenders is safe
+  const to = chaseTarget(s, h, t) ?? landingFor(s, h, t.to);
   if (to && !cover.has(to.y * 64 + to.x)) {
     land(s, h, to);
   } else {
@@ -402,8 +431,10 @@ function resolveHeart(s: FightState, h: Piece, aim: Vec | null) {
  * the lane to dodge — you can't escape a lane by staying on it, and it reaches a
  * far one no stepper could. The first own-side piece (or the board edge) ends
  * the lane. With no friend to catch, it lands on the telegraphed square if that
- * move is still legal. Steppers, leapers and pawns can't pursue: they only take
- * a friend sitting on the exact aimed square, else land there if still legal.
+ * move is still legal. Steppers and leapers resolve only the exact aimed square
+ * here — but a *red* attack tracks its target across squares one level up, in
+ * chaseTarget: this is only the square-by-square fallback when there's no live
+ * target to chase (a quiet move, or a target that dodged clear of reach).
  *
  * A pawn aiming a diagonal capture has no lane to chase along — if the target
  * stepped away, it pushes forward instead of standing idle (that's a dodge,
@@ -479,6 +510,8 @@ function assignTelegraphs(s: FightState) {
     .sort((a, b) => b.score - a.score);
   for (const r of ranked.slice(0, Math.max(0, n))) {
     const t: Telegraph = { pieceId: r.id, to: r.to };
+    const tgt = friendTarget(s, r.to);
+    if (tgt != null) t.target = tgt;
     if (r.alt) t.alt = r.alt;
     if (r.e.veiled) t.veiled = true;
     s.telegraphs.push(t);
