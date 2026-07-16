@@ -1,7 +1,7 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
 import { enemies, type PromotionKind } from './game/fight';
-import { FIGHTS, KIND_INFO, TRINKETS, type RunState } from './game/run';
+import { KIND_INFO, REGION_NAMES, regionOf, TRINKETS, type RunState } from './game/run';
 import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
@@ -13,9 +13,9 @@ const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing s
 const PAUSE_MS = 340; // beat after your move, before the bramble acts
 const TWEEN_MS = 190; // how long their slide/leap takes to draw
 const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
-// v2: the AI dials changed how the bramble thinks (and how much RNG it
-// drinks), so v1 decision logs no longer replay faithfully — let them go
-const SAVE_KEY = 'overgrown.save.v2';
+// v3: the ladder went from 7 fixed fights to 3 regions of 4 rolled off the
+// seed — older decision logs no longer replay faithfully, so let them go
+const SAVE_KEY = 'overgrown.save.v3';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -142,7 +142,7 @@ function title() {
     const friends = saved.run.companions.filter((c) => !c.shaken).length + 1;
     choices.push({
       label: 'Keep going',
-      sub: `Clearing ${saved.run.fightIndex + 1} of ${FIGHTS.length}, ${friends} of you on the path.`,
+      sub: `Clearing ${saved.run.fightIndex + 1} of ${saved.run.fights.length}, ${friends} of you on the path.`,
       fn: () => {
         sess = saved;
         stageUi();
@@ -206,9 +206,9 @@ function stageUi() {
 
 function fightIntro() {
   if (!run) return;
-  const spec = FIGHTS[run.fightIndex];
+  const spec = run.fights[run.fightIndex];
   showOverlay(
-    `Clearing ${run.fightIndex + 1}: ${spec.name}`,
+    `${REGION_NAMES[regionOf(run.fightIndex)]} · ${spec.name}`,
     `${spec.intro}<span class="objective">🌼 ${spec.objective ?? OBJECTIVE}</span>`,
     [
       {
@@ -336,7 +336,7 @@ function endOfRunUi() {
   showOverlay(
     'The meadow is quiet 🌼',
     'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
-      `You won the whole thing — ${FIGHTS.length} clearings taken back, ` +
+      `You won the whole thing — ${run.fights.length} clearings taken back, ` +
       `and ${friends + 1} of you walking home for tea.`,
     [{ label: 'New run', fn: startRun }],
   );
@@ -479,7 +479,7 @@ function goalLabel(): string {
 
 function refreshHud() {
   if (!run || !fight) return;
-  hudName.textContent = `${fight.name} · ${run.fightIndex + 1}/${FIGHTS.length}`;
+  hudName.textContent = `${fight.name} · ${run.fightIndex + 1}/${run.fights.length}`;
   const goal = goalLabel();
   statusLineEl.textContent = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
   statusEl.className = fight.status !== 'playing' ? fight.status : phase;

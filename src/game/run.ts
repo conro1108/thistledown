@@ -15,12 +15,14 @@ export interface RunState {
   seed: number;
   rng: Rng;
   fightIndex: number;
+  /** this run's ladder, rolled off the seed at newRun (see generateFights) */
+  fights: FightSpec[];
   companions: Companion[];
   trinkets: TrinketId[];
   status: 'playing' | 'won' | 'lost';
 }
 
-export const ROSTER_CAP = 5;
+export const ROSTER_CAP = 6;
 
 export const KIND_INFO: Record<Kind, { title: string; blurb: string }> = {
   keeper: {
@@ -73,6 +75,13 @@ export const KIND_INFO: Record<Kind, { title: string; blurb: string }> = {
   },
 };
 
+/** One bramble creature in a fight spec, with its temperament. */
+export interface EnemySpec {
+  kind: Kind;
+  fickle?: boolean;
+  veiled?: boolean;
+}
+
 export interface FightSpec {
   name: string;
   intro: string;
@@ -81,51 +90,121 @@ export interface FightSpec {
   w: number;
   h: number;
   acts: number;
-  /** which kinds appear — buildFightConfig rolls their actual squares fresh each run */
-  enemies: Kind[];
+  /** who appears — buildFightConfig rolls their actual squares fresh each run */
+  enemies: EnemySpec[];
   /** how sharply the bramble plays here — omitted means naive (region 1 default) */
   dials?: Partial<AiDials>;
   /** the anti-stall reinforcement clock */
   spread?: SpreadConfig;
 }
 
-export const FIGHTS: FightSpec[] = [
+// ---------- the ladder: 3 regions × 4 clearings ----------
+
+export const REGION_NAMES = ['The Meadow', 'The Thicket', 'The Deep Bramble'];
+export const FIGHTS_PER_REGION = 4;
+
+export function regionOf(fightIndex: number): number {
+  return Math.min(REGION_NAMES.length - 1, Math.floor(fightIndex / FIGHTS_PER_REGION));
+}
+
+/**
+ * A fight template: the authored part (the lesson — board, tempo, dials, and
+ * the `core` enemies that ARE the lesson) plus a points `budget` of extra
+ * bramble rolled fresh per run from `pool`. Costs are piece values, so the
+ * threat level of a clearing holds steady while its shape varies run to run.
+ */
+interface FightTemplate extends Omit<FightSpec, 'enemies'> {
+  core: EnemySpec[];
+  budget: number;
+  pool?: Kind[];
+  /** chance a rolled extra comes out fickle / shrouded (region spice) */
+  fickleChance?: number;
+  veiledChance?: number;
+}
+
+const COST: Partial<Record<Kind, number>> = {
+  thistle: 1,
+  tumbleweed: 3,
+  creeper: 3,
+  golem: 5,
+  gloom: 9,
+};
+
+const CORNER_HEART = 'Corner it — leave it nowhere safe to step.';
+
+const TEMPLATES: FightTemplate[] = [
+  // -------- The Meadow: full telegraphs, a naive bramble, one lesson each --------
   {
     name: 'Meadow Edge',
     intro: 'Thistles in the clover. An arrow marks the one about to move — and exactly where it’s going.',
     w: 6,
     h: 6,
-    spread: { after: 14, every: 3, cap: 5 },
     acts: 1,
-    enemies: ['thistle', 'thistle', 'thistle'],
+    spread: { after: 14, every: 3, cap: 5 },
+    core: [{ kind: 'thistle' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 0,
   },
   {
     name: 'The Warren',
     intro: 'Something out here bounces in an L shape. Right over your heads.',
     w: 6,
     h: 6,
-    spread: { after: 14, every: 3, cap: 5 },
     acts: 1,
-    enemies: ['thistle', 'thistle', 'tumbleweed'],
+    spread: { after: 14, every: 3, cap: 5 },
+    core: [{ kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
+    budget: 1,
+    pool: ['thistle'],
   },
   {
     name: 'Hedgerow',
     intro: 'The bramble is getting bolder — two of them move every turn now.',
     w: 7,
     h: 7,
-    spread: { after: 12, every: 3, cap: 6 },
     acts: 2,
-    enemies: ['thistle', 'thistle', 'tumbleweed', 'tumbleweed'],
-    dials: { foresight: 0.3, caution: 0.3 },
+    spread: { after: 12, every: 3, cap: 6 },
+    core: [{ kind: 'thistle' }, { kind: 'tumbleweed' }, { kind: 'tumbleweed' }],
+    budget: 2,
+    pool: ['thistle'],
+    dials: { foresight: 0.2, caution: 0.2 },
   },
   {
-    name: 'Bramble Gate',
-    intro: 'A creeper vine. It slides diagonally as far as it likes — mind the long lanes.',
+    name: 'The Heart Sapling',
+    intro:
+      'A young heart of the bramble, still soft. No paw can land on it — hem it in, friends covering every path, until it has nowhere safe to step.',
+    objective: CORNER_HEART,
     w: 7,
     h: 7,
-    spread: { after: 12, every: 3, cap: 6 },
     acts: 2,
-    enemies: ['creeper', 'thistle', 'thistle', 'tumbleweed'],
+    spread: { after: 10, every: 3, cap: 6 },
+    core: [{ kind: 'heart' }, { kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
+    budget: 0,
+    dials: { foresight: 0.3, caution: 0.3 },
+  },
+  // -------- The Thicket: sliders everywhere, and the first fickle arrows --------
+  {
+    name: 'Bramble Gate',
+    intro:
+      'The Thicket closes in overhead. A creeper vine slides diagonally as far as it likes — mind the long lanes.',
+    w: 7,
+    h: 7,
+    acts: 2,
+    spread: { after: 12, every: 3, cap: 6 },
+    core: [{ kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 3,
+    pool: ['thistle', 'tumbleweed'],
+    dials: { foresight: 0.4, caution: 0.4 },
+  },
+  {
+    name: 'Fickleweed Field',
+    intro:
+      'Fickle things grow here — two arrows each. They mean both, and take whichever looks tastier when they move. Plan for either.',
+    w: 7,
+    h: 7,
+    acts: 2,
+    spread: { after: 12, every: 3, cap: 6 },
+    core: [{ kind: 'tumbleweed', fickle: true }, { kind: 'creeper', fickle: true }, { kind: 'thistle' }],
+    budget: 2,
+    pool: ['thistle'],
     dials: { foresight: 0.5, caution: 0.5 },
   },
   {
@@ -133,34 +212,120 @@ export const FIGHTS: FightSpec[] = [
     intro: 'A root golem grinds down the straight lanes. Never stand in its row with nothing between you.',
     w: 8,
     h: 8,
-    spread: { after: 12, every: 3, cap: 7 },
     acts: 2,
-    enemies: ['golem', 'creeper', 'creeper', 'thistle', 'thistle'],
-    dials: { foresight: 0.7, caution: 0.6 },
+    spread: { after: 12, every: 3, cap: 7 },
+    core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 3,
+    pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.3,
+    dials: { foresight: 0.6, caution: 0.5 },
   },
   {
     name: 'Gloom Hollow',
-    intro: 'The Gloom itself. It goes anywhere, any distance, and three things move every turn. Deep breath.',
+    intro: 'The Gloom itself — anywhere, any distance. Do not let it see the Keeper.',
     w: 8,
     h: 8,
+    acts: 2,
     spread: { after: 12, every: 3, cap: 7 },
+    core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 3,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.3,
+    dials: { foresight: 0.7, caution: 0.6 },
+  },
+  // -------- The Deep Bramble: shrouded intent — read reaches, not arrows --------
+  {
+    name: 'Duskmoss',
+    intro:
+      'The Deep Bramble, where the gloom pools. Shrouded things live here — no arrows, no promises. Tap any creature to light up everywhere it could strike.',
+    w: 8,
+    h: 8,
+    acts: 2,
+    spread: { after: 12, every: 3, cap: 7 },
+    core: [
+      { kind: 'creeper', veiled: true },
+      { kind: 'tumbleweed', veiled: true },
+      { kind: 'thistle' },
+      { kind: 'thistle' },
+    ],
+    budget: 2,
+    pool: ['thistle'],
+    dials: { foresight: 0.8, caution: 0.7 },
+  },
+  {
+    name: 'Tangle Deep',
+    intro: 'Three of them move every turn now. Breathe. Count the arrows twice.',
+    w: 8,
+    h: 8,
     acts: 3,
-    enemies: ['gloom', 'golem', 'creeper', 'thistle', 'thistle'],
+    spread: { after: 11, every: 3, cap: 8 },
+    core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'tumbleweed' }],
+    budget: 4,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.25,
+    veiledChance: 0.25,
+    dials: { foresight: 0.9, caution: 0.8 },
+  },
+  {
+    name: 'The Old Wall',
+    intro:
+      'Root golems built this wall, and shrouded ones still patrol it. The straight lanes are never safe — check them square by square.',
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 11, every: 2, cap: 8 },
+    core: [{ kind: 'golem', veiled: true }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 4,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    veiledChance: 0.3,
     dials: { foresight: 0.9, caution: 0.8 },
   },
   {
     name: 'The Bramble Heart',
     intro:
       'The heart of it all. It cannot be caught — no paw lands on it. Hem it in, friends covering every path, until it has nowhere safe to step.',
-    objective: 'Corner the Bramble Heart — leave it nowhere safe to step.',
+    objective: CORNER_HEART,
     w: 8,
     h: 8,
-    spread: { after: 10, every: 2, cap: 7 },
     acts: 2,
-    enemies: ['heart', 'golem', 'creeper', 'thistle', 'thistle'],
+    spread: { after: 10, every: 2, cap: 8 },
+    core: [
+      { kind: 'heart' },
+      { kind: 'golem' },
+      { kind: 'creeper', veiled: true },
+      { kind: 'thistle', fickle: true },
+      { kind: 'thistle' },
+    ],
+    budget: 2,
+    pool: ['thistle'],
     dials: { foresight: 1, caution: 0.9 },
   },
 ];
+
+/**
+ * Roll the run's ladder off its own RNG stream (not the decision-log one, so
+ * play choices never shift what the meadow contains). Same seed, same ladder —
+ * daily seeds and mid-run saves both lean on this.
+ */
+export function generateFights(seed: number): FightSpec[] {
+  const rng = mulberry32((seed ^ 0x5eed1e7) >>> 0);
+  return TEMPLATES.map((t) => {
+    const { core, budget, pool, fickleChance, veiledChance, ...spec } = t;
+    const enemies = core.map((e) => ({ ...e }));
+    let left = budget;
+    for (;;) {
+      const afford = (pool ?? []).filter((k) => (COST[k] ?? Infinity) <= left);
+      if (!afford.length) break;
+      const kind = afford[Math.floor(rng() * afford.length)];
+      const e: EnemySpec = { kind };
+      if (fickleChance && rng() < fickleChance) e.fickle = true;
+      else if (veiledChance && rng() < veiledChance) e.veiled = true;
+      enemies.push(e);
+      left -= COST[kind]!;
+    }
+    return { ...spec, enemies };
+  });
+}
 
 const NAMES = [
   'Pickle',
@@ -182,6 +347,7 @@ export function newRun(seed: number): RunState {
     seed,
     rng: mulberry32(seed),
     fightIndex: 0,
+    fights: generateFights(seed),
     companions: [
       { kind: 'sprout', name: 'Pickle', shaken: false },
       { kind: 'sprout', name: 'Clover', shaken: false },
@@ -202,14 +368,17 @@ export function makeName(run: RunState): string {
   return 'Kid ' + Math.floor(run.rng() * 100);
 }
 
-/** Two distinct recruit offers, drawn from a pool that grows with the run. */
+/** Two distinct recruit offers, drawn from a pool that grows region by region. */
 export function offerRecruits(run: RunState): Kind[] {
+  const r = regionOf(run.fightIndex);
   const pool: Kind[] =
     run.fightIndex <= 1
       ? ['sprout', 'hopper']
-      : run.fightIndex <= 3
+      : r === 0
         ? ['sprout', 'hopper', 'slink', 'rumble']
-        : ['slink', 'rumble', 'duchess'];
+        : r === 1
+          ? ['hopper', 'slink', 'rumble']
+          : ['slink', 'rumble', 'duchess'];
   const a = pool[Math.floor(run.rng() * pool.length)];
   let b = a;
   while (b === a) b = pool[Math.floor(run.rng() * pool.length)];
@@ -258,8 +427,8 @@ export function takeTrinket(run: RunState, id: TrinketId) {
 
 // ---------- camp ----------
 
-/** Camps sit before these clearings (0-based fightIndex). */
-const CAMPS = new Set([2, 4]);
+/** Camps sit before each region's boss (0-based fightIndex). */
+const CAMPS = new Set([3, 7, 11]);
 
 export function campDue(run: RunState): boolean {
   return run.status === 'playing' && CAMPS.has(run.fightIndex);
@@ -303,9 +472,11 @@ function friendCoverAtSpawn(w: number, h: number, friends: Spawn[]): Set<string>
  */
 function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
   const zoneRows = Math.max(2, Math.floor(spec.h / 2) - 1);
-  const heartCover = spec.enemies.includes('heart') ? friendCoverAtSpawn(spec.w, spec.h, friends) : null;
+  const heartCover = spec.enemies.some((e) => e.kind === 'heart')
+    ? friendCoverAtSpawn(spec.w, spec.h, friends)
+    : null;
   const taken = new Set<string>();
-  return spec.enemies.map((kind) => {
+  return spec.enemies.map((es) => {
     let x = 0;
     let y = 0;
     let key = '';
@@ -315,11 +486,11 @@ function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
       x = Math.floor(rng() * spec.w);
       y = Math.floor(rng() * zoneRows);
       key = `${x},${y}`;
-      bad = taken.has(key) || (kind === 'heart' && heartCover!.has(key));
+      bad = taken.has(key) || (es.kind === 'heart' && heartCover!.has(key));
       tries++;
     } while (bad && tries < 200); // give up steering clear rather than hang — a clash of constraints beats an infinite loop
     taken.add(key);
-    return { kind, x, y };
+    return { ...es, x, y };
   });
 }
 
@@ -328,7 +499,7 @@ function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
  * Shaken companions sit this one out.
  */
 export function buildFightConfig(run: RunState): BuiltFight {
-  const spec = FIGHTS[run.fightIndex];
+  const spec = run.fights[run.fightIndex];
   const cx = Math.floor(spec.w / 2);
   const friends: Spawn[] = [{ kind: 'keeper', x: cx, y: spec.h - 1 }];
   const lineup: number[] = [];
@@ -369,5 +540,5 @@ export function afterFightWon(run: RunState, lineup: number[], aliveCompanionIdx
     c.shaken = lineup.includes(i) ? !aliveCompanionIdx.has(i) : false;
   });
   run.fightIndex++;
-  if (run.fightIndex >= FIGHTS.length) run.status = 'won';
+  if (run.fightIndex >= run.fights.length) run.status = 'won';
 }
