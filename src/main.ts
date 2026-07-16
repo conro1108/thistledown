@@ -21,7 +21,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
     <span id="fightname">Overgrown</span>
-    <span id="hud-right"><button id="history-btn" class="trinket hidden" title="Look back">⏪</button><span id="trinkets"></span></span>
+    <span id="hud-right"><button id="dev-btn" class="trinket hidden" title="Dev">🔧</button><button id="history-btn" class="trinket hidden" title="Look back">⏪</button><span id="trinkets"></span></span>
   </header>
   <div id="board-area">
     <canvas id="backdrop" width="1" height="1"></canvas>
@@ -56,6 +56,7 @@ const hintEl = document.querySelector<HTMLDivElement>('#hint')!;
 const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
 const overlayEl = document.querySelector<HTMLDivElement>('#overlay')!;
 const historyBtn = document.querySelector<HTMLButtonElement>('#history-btn')!;
+const devBtn = document.querySelector<HTMLButtonElement>('#dev-btn')!;
 const historyBar = document.querySelector<HTMLDivElement>('#history-bar')!;
 const histPrev = document.querySelector<HTMLButtonElement>('#hist-prev')!;
 const histNext = document.querySelector<HTMLButtonElement>('#hist-next')!;
@@ -98,7 +99,7 @@ function doEntry(e: LogEntry): boolean {
 }
 
 function persist() {
-  if (!sess) return;
+  if (!sess || devDirty) return; // a hand-tuned log wouldn't replay
   try {
     if (sess.stage === 'over') localStorage.removeItem(SAVE_KEY);
     else localStorage.setItem(SAVE_KEY, JSON.stringify({ seed: sess.run.seed, log: sess.log }));
@@ -631,9 +632,10 @@ function refreshHud() {
   statusEl.className = fight.status !== 'playing' ? fight.status : phase;
   historyBtn.classList.toggle(
     'hidden',
-    !sess || sess.stage !== 'fight' || fight.status !== 'playing',
+    devDirty || !sess || sess.stage !== 'fight' || fight.status !== 'playing',
   );
   historyBtn.disabled = phase !== 'player';
+  devBtn.classList.toggle('hidden', !devMode);
   trinketsEl.innerHTML = '';
   for (const id of run.trinkets) {
     // a real button: title= tooltips don't exist on a phone
@@ -833,6 +835,7 @@ function beginEnemyTurn() {
  */
 function enterHistory() {
   if (!sess || !fight || phase !== 'player' || sess.stage !== 'fight') return;
+  if (devDirty) return; // replay can't rebuild hand-tuned state
   let begin = -1;
   for (let i = sess.log.length - 1; i >= 0; i--) {
     if (sess.log[i].t === 'begin') {
@@ -897,6 +900,216 @@ histNext.onclick = () => {
   }
 };
 histLive.onclick = exitHistory;
+
+// ---------- dev panel: see and tune everything ----------
+
+/** Dev mode: ?dev in the URL, or five quick taps on the clearing name. */
+let devMode =
+  new URLSearchParams(location.search).has('dev') || localStorage.getItem('overgrown.dev') === '1';
+/** Hand-tuned state can't replay from the decision log: save + look-back turn off. */
+let devDirty = false;
+let revealVeiled = false;
+let devTaps: number[] = [];
+
+hudName.addEventListener('click', () => {
+  const now = Date.now();
+  devTaps = devTaps.filter((t) => now - t < 1800);
+  devTaps.push(now);
+  if (devTaps.length >= 5) {
+    devTaps = [];
+    devMode = !devMode;
+    try {
+      localStorage.setItem('overgrown.dev', devMode ? '1' : '0');
+    } catch {
+      /* fine */
+    }
+    refreshHud();
+  }
+});
+
+function markDevDirty() {
+  if (devDirty) return;
+  devDirty = true;
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch {
+    /* fine */
+  }
+}
+
+/** Jump the run to a clearing (dev only): session surgery, then the normal intro flow. */
+function devJump(idx: number) {
+  if (!sess) return;
+  markDevDirty();
+  sess.run.fightIndex = Math.max(0, Math.min(sess.run.fights.length - 1, idx));
+  sess.run.status = 'playing';
+  sess.fight = null;
+  sess.stage = 'intro';
+  run = sess.run;
+  fight = null;
+  stageUi();
+}
+
+interface DevField {
+  label: string;
+  get: () => number;
+  set: (v: number) => void;
+  step?: number;
+}
+
+function devRow(f: DevField): HTMLLabelElement {
+  const row = document.createElement('label');
+  row.className = 'dev-row';
+  const span = document.createElement('span');
+  span.textContent = f.label;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = String(f.step ?? 0.1);
+  input.value = String(Math.round(f.get() * 100) / 100);
+  input.onchange = () => {
+    const v = parseFloat(input.value);
+    if (Number.isNaN(v)) return;
+    markDevDirty();
+    f.set(v);
+    refreshHud();
+  };
+  row.append(span, input);
+  return row;
+}
+
+function devSection(parent: HTMLElement, title: string): HTMLDivElement {
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const box = document.createElement('div');
+  box.className = 'dev-grid';
+  parent.append(h, box);
+  return box;
+}
+
+function showDevPanel() {
+  if (!sess || !run) return;
+  overlayEl.innerHTML = '<div class="card dev"><h2>🔧 Dev</h2><div class="dev-body"></div><div class="btns"><button class="close">Close</button></div></div>';
+  const body = overlayEl.querySelector<HTMLDivElement>('.dev-body')!;
+  overlayEl.querySelector<HTMLButtonElement>('.close')!.onclick = () => {
+    overlayEl.classList.add('hidden');
+    refreshHud();
+  };
+
+  const note = document.createElement('p');
+  note.className = 'dev-note';
+  note.textContent = devDirty
+    ? '⚠ hand-tuned session: saving and look-back are off until a new run'
+    : 'tuning anything turns off saving and look-back for this session';
+  body.append(note);
+
+  if (fight && fight.status === 'playing') {
+    const f = fight;
+    const dials = devSection(body, `${f.name} — bramble mind (applies from its next telegraph)`);
+    dials.append(
+      devRow({ label: 'foresight', get: () => f.dials.foresight, set: (v) => (f.dials.foresight = v) }),
+      devRow({ label: 'caution', get: () => f.dials.caution, set: (v) => (f.dials.caution = v) }),
+      devRow({ label: 'bloodlust', get: () => f.dials.bloodlust, set: (v) => (f.dials.bloodlust = v) }),
+      devRow({ label: 'temperature', get: () => f.dials.temperature, set: (v) => (f.dials.temperature = v) }),
+      devRow({ label: 'acts/turn', get: () => f.actsPerTurn, set: (v) => (f.actsPerTurn = Math.max(1, Math.round(v))), step: 1 }),
+    );
+    const clock = devSection(body, 'spread clock & charges');
+    if (f.spread) {
+      const c = f.spread;
+      clock.append(
+        devRow({ label: 'after turn', get: () => c.after, set: (v) => (c.after = Math.round(v)), step: 1 }),
+        devRow({ label: 'every', get: () => c.every, set: (v) => (c.every = Math.max(1, Math.round(v))), step: 1 }),
+        devRow({ label: 'cap', get: () => c.cap, set: (v) => (c.cap = Math.round(v)), step: 1 }),
+      );
+    }
+    clock.append(
+      devRow({ label: 'cloak charges', get: () => f.cloakLeft, set: (v) => (f.cloakLeft = Math.max(0, Math.round(v))), step: 1 }),
+      devRow({ label: 'free moves', get: () => f.freeMoves, set: (v) => (f.freeMoves = Math.max(0, Math.round(v))), step: 1 }),
+    );
+  }
+
+  const runBox = devSection(body, `run — seed ${run.seed}, clearing ${run.fightIndex + 1}/${run.fights.length}`);
+  const mkBtn = (label: string, fn: () => void) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => {
+      overlayEl.classList.add('hidden');
+      fn();
+    };
+    return b;
+  };
+  runBox.append(
+    mkBtn('◀ prev clearing', () => devJump(run!.fightIndex - 1)),
+    mkBtn('↻ restart clearing', () => devJump(run!.fightIndex)),
+    mkBtn('next clearing ▶', () => devJump(run!.fightIndex + 1)),
+    mkBtn('heal roster', () => {
+      markDevDirty();
+      for (const c of run!.companions) c.shaken = false;
+      refreshHud();
+    }),
+  );
+
+  const toggles = devSection(body, 'sight & trinkets');
+  const veilBtn = document.createElement('button');
+  const veilLabel = () => `shroud x-ray: ${revealVeiled ? 'ON' : 'off'}`;
+  veilBtn.textContent = veilLabel();
+  veilBtn.onclick = () => {
+    revealVeiled = !revealVeiled; // render-only: the log stays replayable
+    veilBtn.textContent = veilLabel();
+  };
+  toggles.append(veilBtn);
+  for (const id of Object.keys(TRINKETS) as (keyof typeof TRINKETS)[]) {
+    const b = document.createElement('button');
+    const label = () => `${TRINKETS[id].icon} ${run!.trinkets.includes(id) ? 'ON' : 'off'}`;
+    b.textContent = label();
+    b.onclick = () => {
+      markDevDirty();
+      run!.trinkets = run!.trinkets.includes(id)
+        ? run!.trinkets.filter((t) => t !== id)
+        : [...run!.trinkets, id];
+      b.textContent = label();
+      refreshHud();
+    };
+    toggles.append(b);
+  }
+
+  const seedBox = devSection(body, 'new run from seed');
+  const seedInput = document.createElement('input');
+  seedInput.type = 'number';
+  seedInput.value = String(run.seed);
+  seedBox.append(
+    seedInput,
+    mkBtn('grow this meadow', () => {
+      const seed = parseInt(seedInput.value, 10);
+      sess = newSession(Number.isNaN(seed) ? Date.now() % 2147483647 : seed);
+      devDirty = false; // a fresh seeded session replays fine
+      persist();
+      stageUi();
+    }),
+  );
+
+  if (fight) {
+    const dump = document.createElement('pre');
+    dump.className = 'dev-dump';
+    dump.textContent = JSON.stringify(
+      {
+        turn: fight.turn,
+        status: fight.status,
+        dials: fight.dials,
+        spread: fight.spread ?? null,
+        pendingSprout: fight.pendingSprout,
+        telegraphs: fight.telegraphs,
+        pieces: fight.pieces.map((p) => `${p.side[0]} ${p.kind} @${p.x},${p.y}${p.spry ? ' spry' : ''}${p.fickle ? ' fickle' : ''}${p.veiled ? ' veiled' : ''}`),
+      },
+      null,
+      1,
+    );
+    body.append(dump);
+  }
+
+  overlayEl.classList.remove('hidden');
+}
+
+devBtn.onclick = showDevPanel;
 
 // ---------- input ----------
 
@@ -1040,7 +1253,14 @@ function frame(time: number) {
     draw(
       ctx,
       fight,
-      { selected, hover: inspect, fx, posOverrides: overrides, telegraphOverride: frozenTelegraphs ?? undefined },
+      {
+        selected,
+        hover: inspect,
+        fx,
+        posOverrides: overrides,
+        telegraphOverride: frozenTelegraphs ?? undefined,
+        revealVeiled: revealVeiled || undefined,
+      },
       time,
     );
     for (const f of fx) f.t++;

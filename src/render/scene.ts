@@ -21,6 +21,8 @@ export interface View {
   posOverrides?: PosOverrides;
   /** while set, drawn instead of s.telegraphs (the round that's resolving) */
   telegraphOverride?: Telegraph[];
+  /** dev x-ray: draw shrouded telegraphs as real arrows */
+  revealVeiled?: boolean;
 }
 
 const GRASS_A = '#87aa56';
@@ -40,7 +42,7 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
   for (const t of telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e) continue;
-    if (t.veiled) {
+    if (t.veiled && !v.revealVeiled) {
       // shrouded: it HAS committed — the player just doesn't get the arrow
       questionGlyph(ctx, e.x, e.y);
       continue;
