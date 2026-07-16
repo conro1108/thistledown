@@ -1,4 +1,4 @@
-import { inBounds, movesFor, pieceAt, threatsFor } from './board';
+import { inBounds, isPawn, movesFor, pieceAt, threatsFor } from './board';
 import type { FightState, Kind, Piece, Rng, Vec } from './types';
 
 export interface Spawn {
@@ -267,10 +267,20 @@ function resolveHeart(s: FightState, h: Piece, aim: Vec | null) {
  * the lane. With no friend to catch, it lands on the telegraphed square if that
  * move is still legal. Steppers, leapers and pawns can't pursue: they only take
  * a friend sitting on the exact aimed square, else land there if still legal.
+ *
+ * A pawn aiming a diagonal capture has no lane to chase along — if the target
+ * stepped away, it pushes forward instead of standing idle (that's a dodge,
+ * not a block). A pawn aiming straight ahead that gets walled off head-on
+ * stays genuinely blocked — that's the block tactic, and it stays a tactic.
  */
 function landingFor(s: FightState, e: Piece, aim: Vec): Vec | null {
   const legal = movesFor(s, e);
   const aimHit = legal.some((m) => m.x === aim.x && m.y === aim.y) ? aim : null;
+  if (isPawn(e.kind)) {
+    if (aimHit) return aimHit;
+    if (aim.x === e.x) return null; // forward push blocked head-on
+    return legal.find((m) => m.x === e.x) ?? null; // dodged diagonal: push forward
+  }
   const dx = Math.sign(aim.x - e.x);
   const dy = Math.sign(aim.y - e.y);
   const straight = dx === 0 || dy === 0 || Math.abs(aim.x - e.x) === Math.abs(aim.y - e.y);

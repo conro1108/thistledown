@@ -285,6 +285,39 @@ describe('fight loop', () => {
     expect(s.telegraphs).toHaveLength(0);
   });
 
+  it('a thistle whose diagonal capture target dodges away pushes forward instead of idling', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'sprout', x: 3, y: 4 }],
+      [{ kind: 'thistle', x: 2, y: 3 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 4 });
+    playerMove(s, idAt(s, 3, 4), { x: 3, y: 3 }); // step away, not into its path
+    resolveEnemyTurn(s);
+    const thistle = s.pieces.find((p) => p.kind === 'thistle')!;
+    expect(thistle.x).toBe(2);
+    expect(thistle.y).toBe(4); // it pushed straight ahead instead of standing idle
+    expect(s.pieces.find((p) => p.kind === 'sprout')).toBeDefined(); // the dodge worked
+    expect(s.events.some((ev) => ev.type === 'blocked')).toBe(false);
+  });
+
+  it('a thistle whose diagonal target dodges away stands idle if the forward push is also blocked', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 5, y: 5 },
+        { kind: 'sprout', x: 3, y: 4 },
+        { kind: 'hopper', x: 2, y: 4 }, // sits directly in front of the thistle
+      ],
+      [{ kind: 'thistle', x: 2, y: 3 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 4 });
+    playerMove(s, idAt(s, 3, 4), { x: 3, y: 3 }); // dodge away
+    resolveEnemyTurn(s);
+    const thistle = s.pieces.find((p) => p.kind === 'thistle')!;
+    expect(thistle.x).toBe(2);
+    expect(thistle.y).toBe(3); // no legal forward push either, so it's genuinely stuck
+    expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'thistle')).toBe(true);
+  });
+
   it("interposing into a slider's lane costs you the piece — it takes the blocker, not a free block", () => {
     // creeper (diagonal slider) at (1,1) aims down-right at the sprout on (4,4)
     const s = fight(
