@@ -142,12 +142,19 @@ export function resolveEnemyTurn(s: FightState) {
 
 // ---------- the Bramble Heart ----------
 
-/** Every square the friend side covers (threatens or defends). */
+/**
+ * Every square the friend side covers (threatens or defends). Evaluated with
+ * the Heart removed from the board so a slider's ray reads *through* the square
+ * it stands on: the square directly behind a checked Heart is no refuge — the
+ * lane still reaches it once the Heart steps off. Removing the Heart only ever
+ * extends rays (it was a blocker), so no genuinely safe square is lost.
+ */
 function friendCover(s: FightState): Set<number> {
   const set = new Set<number>();
-  for (const p of s.pieces) {
+  const view = { ...s, pieces: s.pieces.filter((p) => p.kind !== 'heart') };
+  for (const p of view.pieces) {
     if (p.side !== 'friend') continue;
-    for (const t of threatsFor(s, p)) set.add(t.y * 64 + t.x);
+    for (const t of threatsFor(view, p)) set.add(t.y * 64 + t.x);
   }
   return set;
 }

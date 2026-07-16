@@ -141,6 +141,27 @@ describe('fight loop', () => {
     expect(s.pieces.some((p) => p.kind === 'heart')).toBe(false); // poofed
   });
 
+  it('the square behind the heart on a slider lane counts as covered (x-ray)', () => {
+    // rumble on row 0 checks the heart at (1,0); its ray stops at the heart, so
+    // the square directly behind it — (0,0) — must still count as covered. A
+    // second rumble seals row 1. Every real escape is threatened: this is mate.
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 3, y: 0 }, // row 0: threatens through the heart to (0,0)
+        { kind: 'rumble', x: 3, y: 1 }, // row 1: (2,1),(1,1),(0,1)
+      ],
+      [{ kind: 'heart', x: 1, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    // any neutral move — the net is already closed
+    expect(playerMove(s, idAt(s, 3, 3), { x: 3, y: 2 })).toBe(true);
+    expect(s.status).toBe('won');
+    expect(s.events.some((ev) => ev.type === 'cornered')).toBe(true);
+  });
+
   it('a heart with a safe square is not cornered', () => {
     const s = fight(
       [
