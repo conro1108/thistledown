@@ -46,8 +46,10 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       continue;
     }
     if (!t.to) {
-      // nowhere to go — snoozing, not broken
-      sleepGlyph(ctx, e.x, e.y);
+      // nowhere to go. The Heart digging in is a stand, not a nap — it gets
+      // bracing roots; everyone else gets an honest snooze.
+      if (e.kind === 'heart') digGlyph(ctx, e.x, e.y);
+      else sleepGlyph(ctx, e.x, e.y);
       continue;
     }
     // red only for a real attack: a friend on the target square that this
@@ -213,11 +215,14 @@ function arrowHead(ctx: CanvasRenderingContext2D, at: Vec, sx: number, sy: numbe
 /** A "?" over a shrouded enemy: it has a plan, you just can't read it. */
 function questionGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
   const rows = ['.##.', '#..#', '...#', '..#.', '....', '..#.'];
-  const px = x * TILE + 10;
-  const py = y * TILE;
+  glyph(ctx, rows, x * TILE + 10, y * TILE, '#efe9f7');
+}
+
+/** Shared pixel-map painter: dark drop shadow, then the light glyph. */
+function glyph(ctx: CanvasRenderingContext2D, rows: string[], px: number, py: number, light: string) {
   for (const [fill, ox, oy] of [
     ['#241533', 1, 1],
-    ['#efe9f7', 0, 0],
+    [light, 0, 0],
   ] as const) {
     ctx.fillStyle = fill;
     rows.forEach((row, ry) => {
@@ -230,17 +235,28 @@ function questionGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
 
 /** A "zZ" over an enemy that is holding still this round. */
 function sleepGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  const px = x * TILE + 9;
-  const py = y * TILE + 1;
-  const z = (ox: number, oy: number, w: number) => {
-    ctx.fillRect(ox, oy, w, 1);
-    for (let i = 0; i < w - 2; i++) ctx.fillRect(ox + w - 2 - i, oy + 1 + i, 1, 1);
-    ctx.fillRect(ox, oy + w - 1, w, 1);
-  };
-  ctx.fillStyle = '#241533'; // shadow so it reads on bright grass
-  z(px + 1, py + 2, 4);
-  z(px + 5, py, 3);
-  ctx.fillStyle = '#efe9f7';
-  z(px, py + 1, 4);
-  z(px + 4, py - 1, 3);
+  // one small z, one big Z — unmistakably a snooze (the old 3px version
+  // famously read as "a little sideways h")
+  const rows = [
+    '......####',
+    '........#.',
+    '.......#..',
+    '......####',
+    '.#####....',
+    '....#.....',
+    '...#......',
+    '..#.......',
+    '.#####....',
+  ];
+  glyph(ctx, rows, x * TILE + 5, y * TILE - 1, '#efe9f7');
+}
+
+/** Roots curling out at the Heart's feet: dug in, braced, going nowhere. */
+function digGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const rows = [
+    '#...#...#..#',
+    '.#..#..#..#.',
+    '..#########.',
+  ];
+  glyph(ctx, rows, x * TILE + 2, y * TILE + 12, '#8fc460');
 }
