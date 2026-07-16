@@ -84,9 +84,8 @@ Sprites cameo, a proper battle log (right now there's no persistent record of
 - [x] `public/sw.js` — network-first with cache fallback. Deliberately not a
       hashed-asset precache list (no build-tool integration yet); bump
       `CACHE` in that file when a release must invalidate old assets
-- [ ] Actually installing this on an iPhone and confirming it launches
-      standalone hasn't been done by a human yet — worth checking before
-      calling PWA support solid
+- [x] Actually installing this on an iPhone and confirming it launches
+      standalone — confirmed working
 - [ ] Capacitor/native wrapper is a "maybe someday," not started
 
 ## Decisions so far
