@@ -151,7 +151,18 @@ Slay-the-Spire-shaped, kept simple:
 - **In-run power**: recruits, movement upgrades, trinkets, snacks. This is the main
   progression and it resets every run.
 - **Difficulty ramp within a run**: bigger boards, more enemies acting per turn,
-  two-option telegraphs, terrain, minibosses.
+  terrain, minibosses — and two axes that carry the teaching arc:
+  - **AI dials** (foresight/caution/bloodlust/temperature): region 1's bramble
+    is naive on purpose — it gifts tempo and walks into danger, and punishing it
+    is the lesson. Later regions reason about exchanges on real piece values.
+    Strength-of-play is a tunable dial, not a rewrite.
+  - **Telegraph degradation**: full arrows → fickle (two committed arrows,
+    takes the better) → shrouded (committed but unshown; tap-to-inspect reach
+    is the read). The training wheels come off gradually — by region 3 the
+    player is doing real threat calculation, which is the whole point.
+- **The spread clock**: linger too long in any fight and marked squares sprout
+  fresh thistles (smotherable by standing on them). Stalling is never free, so
+  "unresolved" positions resolve themselves.
 - **Meta progression stays light** (skill should be the real unlock): new starting
   companions and Keeper variants (a Keeper who starts with a Hopper but no Sprouts; a
   Keeper who can swap places with an adjacent friend once per fight — hi, castling),

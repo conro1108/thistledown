@@ -65,10 +65,32 @@ priority. Don't overspec ahead of what's built.
 - [x] Mid-run save: `session.ts` decision-log state machine (seed + log in
       localStorage, replayed to reconstruct — never raw board state); title
       screen offers "Keep going", resumes mid-fight
+- [x] **AI dials** (`AiDials` on the fight): foresight (recapture math on real
+      piece values + "the player will just take me first" preemption — kills the
+      pawn-chain free-tempo ride), caution (won't hang itself on covered
+      squares), bloodlust, temperature. Region 1 stays naive on purpose:
+      punishing the greedy bramble is the lesson
+- [x] **Spread clock** (anti-stall): past `after` turns a far-edge square is
+      marked, next turn a thistle sprouts there (every `every`, up to `cap`).
+      Standing on the mark smothers it. Blocking stays a tactic; camping a dead
+      position stopped being free (this was the promotion-farm fix)
+- [x] **Telegraph degradation**: fickle enemies (two committed arrows, takes
+      the better at resolve) and shrouded/veiled ones (committed but unshown —
+      a "?", with tap-to-inspect reach as the read). The difficulty spine of
+      regions 2–3
+- [x] **3 regions × 4 clearings** (Meadow → Thicket → Deep Bramble), boss per
+      region (Heart Sapling / the Gloom / the Bramble Heart). Each clearing is
+      a template: authored `core` enemies (the lesson) + a points `budget`
+      (piece values as cost) rolled per run from a region pool, on a dedicated
+      RNG stream so play choices never shift the ladder. Camps before bosses;
+      region-shaped recruit pools; roster cap 6
+- [x] **Choice scenes**: recruits/camp/trinkets/honeycake/promotion all share
+      one card-picker — tap to study (sprite, blurb, 5×5 movement preview),
+      explicit confirm
 - [ ] Sound: WebAudio chiptune, captures pop into flowers
 - [ ] Real art pass (current sprites are placeholders-with-charm)
-- [ ] Balance pass on the fight ladder (current numbers are a guess — and the
-      best-move AI change + the boss both made things meaner)
+- [ ] Balance pass on the 12-fight ladder (dial curve, budgets, spread
+      timings, dual-boss difficulty are all first guesses — playtest and tune)
 
 ## P3 — Later
 
@@ -94,7 +116,13 @@ Sprites cameo, a proper battle log (right now there's no persistent record of
 - Pure capture both ways, no HP (bosses will be the exception later).
 - Telegraphs are re-checked for legality when they resolve — so blocking a thistle
   head-on works (pawns can't capture forward; the game must teach true blocking).
-- Enemy acts-per-turn is the main difficulty dial (1 → 3 across a run).
+- Difficulty scales on several independent axes, not just enemy count:
+  acts-per-turn (1 → 3), AI dials (naive → sharp), telegraph degradation
+  (full → fickle → shrouded), spread-clock pressure, board size.
+- The AI stays a one-ply scorer with exchange awareness — deliberately not a
+  search. Its mistakes are the early curriculum; its dials are the late one.
+- Saves: key bumped (v3) whenever engine changes break decision-log replay;
+  loadSave discards logs that no longer replay.
 - Mutating fight state + seeded RNG. Determinism is good enough for now; strict
   decision-log replay arrives with saves.
 - Sprites are 12×12 pixel maps validated by a unit test (row lengths, palette chars).
