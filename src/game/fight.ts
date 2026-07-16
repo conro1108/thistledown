@@ -223,15 +223,67 @@ function friendCover(s: FightState): Set<number> {
 }
 
 /**
- * The boss rule (checkmate, never named): the Heart is beaten when the
- * square it stands on is covered and every square it could step to is too.
+ * Bramble moves (never the Heart's own) that would leave the Heart's square
+ * uncovered: capturing the checker, or stepping into a slider's lane. The
+ * chess escape hatch the cornering rule must honor — a check the bramble can
+ * answer is pressure, not the end.
+ */
+function heartRescues(s: FightState): { piece: Piece; to: Vec }[] {
+  const h = s.pieces.find((p) => p.kind === 'heart');
+  if (!h) return [];
+  const out: { piece: Piece; to: Vec }[] = [];
+  for (const p of s.pieces) {
+    if (p.side !== 'bramble' || p.kind === 'heart') continue;
+    for (const to of movesFor(s, p)) {
+      // the mover leaves its square; whatever it landed on is captured
+      const pieces = s.pieces
+        .filter((q) => q.id !== p.id && !(q.x === to.x && q.y === to.y))
+        .concat([{ ...p, x: to.x, y: to.y }]);
+      if (!friendCover({ ...s, pieces }).has(h.y * 64 + h.x)) out.push({ piece: p, to });
+    }
+  }
+  return out;
+}
+
+/**
+ * The boss rule (checkmate, never named): the Heart is beaten when the square
+ * it stands on is covered, every square it could step to is too, and no other
+ * bramble piece can take the checker or block the lane. Anything less is an
+ * escapable check — the net has to cover the defenders as well.
  */
 export function heartCornered(s: FightState): boolean {
   const h = s.pieces.find((p) => p.kind === 'heart');
   if (!h) return false;
   const cover = friendCover(s);
   if (!cover.has(h.y * 64 + h.x)) return false;
-  return movesFor(s, h).every((m) => cover.has(m.y * 64 + m.x));
+  if (!movesFor(s, h).every((m) => cover.has(m.y * 64 + m.x))) return false;
+  return heartRescues(s).length === 0;
+}
+
+/**
+ * A checked Heart that can't flee presses one defender into service: the
+ * telegraph that answers the check, ahead of every other appetite. Checks
+ * force the whole side — that's what makes the mating net a real hunt.
+ * Prefers taking the checker; blocks with the cheapest body otherwise.
+ */
+function forcedRescue(s: FightState): Telegraph | null {
+  const h = s.pieces.find((p) => p.kind === 'heart');
+  if (!h) return null;
+  const cover = friendCover(s);
+  if (!cover.has(h.y * 64 + h.x)) return null;
+  if (movesFor(s, h).some((m) => !cover.has(m.y * 64 + m.x))) return null; // it can flee on its own
+  let best: Telegraph | null = null;
+  let bestScore = -Infinity;
+  for (const { piece, to } of heartRescues(s)) {
+    const victim = pieceAt(s, to.x, to.y);
+    const score = (victim ? 100 * PIECE_VALUE[victim.kind] : 0) - PIECE_VALUE[piece.kind];
+    if (score > bestScore) {
+      bestScore = score;
+      best = { pieceId: piece.id, to };
+      if (piece.veiled) best.veiled = true;
+    }
+  }
+  return best;
 }
 
 /** If the heart is cornered, it bursts into flowers and the fight is won. */
@@ -396,15 +448,22 @@ function assignTelegraphs(s: FightState) {
   const es = enemies(s);
   s.telegraphs = [];
   if (es.length === 0) return;
-  const n = Math.min(s.actsPerTurn, es.length);
+  let n = Math.min(s.actsPerTurn, es.length);
+  // a check on the Heart outranks every appetite: the rescue goes first
+  const rescue = forcedRescue(s);
+  if (rescue) {
+    s.telegraphs.push(rescue);
+    n--;
+  }
   // The whole bramble side plays its strongest hand: score every enemy's best
   // move and telegraph the n meanest. Not round-robin — a capture on the table
   // gets taken by whoever can take it, not left because it "isn't their turn."
   const ranked = es
+    .filter((e) => e.id !== rescue?.pieceId)
     .map((e) => ({ e, ...bestMove(s, e) }))
     .filter((r) => r.to != null)
     .sort((a, b) => b.score - a.score);
-  for (const r of ranked.slice(0, n)) {
+  for (const r of ranked.slice(0, Math.max(0, n))) {
     const t: Telegraph = { pieceId: r.id, to: r.to };
     if (r.alt) t.alt = r.alt;
     if (r.e.veiled) t.veiled = true;

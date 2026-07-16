@@ -182,6 +182,78 @@ describe('fight loop', () => {
     expect(s.events.some((ev) => ev.type === 'cornered')).toBe(true);
   });
 
+  it('not cornered while a bramble piece can capture the checker', () => {
+    // rumble at (0,3) checks down column 0; rumble at (1,3) seals column 1.
+    // Old rule: cornered. But the bramble creeper at (3,0) can take the
+    // checking rumble along the (3,0)-(0,3) diagonal — the check is answerable.
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 0, y: 3 },
+        { kind: 'rumble', x: 1, y: 3 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }, { kind: 'creeper', x: 3, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    playerMove(s, idAt(s, 3, 3), { x: 3, y: 2 });
+    expect(s.status).toBe('playing');
+  });
+
+  it('not cornered while a bramble piece can block the checking lane', () => {
+    // same net, but the golem at (2,1) can slide to (0,1) and block column 0
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 0, y: 3 },
+        { kind: 'rumble', x: 1, y: 3 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }, { kind: 'golem', x: 2, y: 1 }],
+      1,
+      4,
+      4,
+    );
+    playerMove(s, idAt(s, 3, 3), { x: 3, y: 2 });
+    expect(s.status).toBe('playing');
+  });
+
+  it('a checked heart with no flee square presses a defender into service', () => {
+    // the position above, from the top: the golem must telegraph the block
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 0, y: 3 },
+        { kind: 'rumble', x: 1, y: 3 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }, { kind: 'golem', x: 2, y: 1 }],
+      1,
+      4,
+      4,
+    );
+    const golem = s.pieces.find((p) => p.kind === 'golem')!;
+    const t = s.telegraphs.find((q) => q.pieceId === golem.id);
+    expect(t?.to).toEqual({ x: 0, y: 1 });
+  });
+
+  it('cornered when the defenders present cannot actually help', () => {
+    // a thistle with no legal move is no rescue — the net still closes
+    const s = fight(
+      [
+        { kind: 'keeper', x: 3, y: 3 },
+        { kind: 'rumble', x: 0, y: 3 },
+        { kind: 'rumble', x: 1, y: 3 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }, { kind: 'thistle', x: 3, y: 2 }],
+      1,
+      4,
+      4,
+    );
+    playerMove(s, idAt(s, 3, 3), { x: 2, y: 3 });
+    expect(s.status).toBe('won');
+    expect(s.events.some((ev) => ev.type === 'cornered')).toBe(true);
+  });
+
   it('a heart with a safe square is not cornered', () => {
     const s = fight(
       [
