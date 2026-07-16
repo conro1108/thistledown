@@ -286,6 +286,44 @@ describe('fight loop', () => {
     expect(s.events.some((ev) => ev.type === 'blocked')).toBe(false);
   });
 
+  it("sliding the target along a slider's lane doesn't escape — it follows down the lane and takes it", () => {
+    // creeper at (1,1) aims down-right at the slink sitting on its diagonal
+    const s = fight(
+      [
+        { kind: 'keeper', x: 0, y: 5 }, // off the creeper's diagonals
+        { kind: 'slink', x: 3, y: 3 },
+      ],
+      [{ kind: 'creeper', x: 1, y: 1 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 3 });
+    playerMove(s, idAt(s, 3, 3), { x: 4, y: 4 }); // slide further down the SAME diagonal to "dodge"
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect(creeper.x).toBe(4);
+    expect(creeper.y).toBe(4); // it chased down the lane
+    expect(s.pieces.find((p) => p.kind === 'slink')).toBeUndefined(); // and caught it
+    expect(s.events.some((ev) => ev.type === 'shaken' && ev.kind === 'slink')).toBe(true);
+    expect(s.events.some((ev) => ev.type === 'blocked')).toBe(false);
+  });
+
+  it('stepping OFF the lane really does escape — the slider lands on its empty target square', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 0, y: 5 },
+        { kind: 'slink', x: 3, y: 3 },
+      ],
+      [{ kind: 'creeper', x: 1, y: 1 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 3 });
+    playerMove(s, idAt(s, 3, 3), { x: 4, y: 2 }); // sidestep off the down-right diagonal
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect(creeper.x).toBe(3);
+    expect(creeper.y).toBe(3); // it slid to the now-empty telegraphed square
+    expect(s.pieces.find((p) => p.kind === 'slink')).toBeDefined(); // the slink got away clean
+    expect(s.events.some((ev) => ev.type === 'shaken')).toBe(false);
+  });
+
   it('a hopper can capture a golem sitting on the back rank', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 2, y: 2 }],

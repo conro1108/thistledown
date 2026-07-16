@@ -1,4 +1,4 @@
-import { movesFor, pieceAt, threatsFor } from './board';
+import { inBounds, movesFor, pieceAt, threatsFor } from './board';
 import type { FightState, Kind, Piece, Rng, Vec } from './types';
 
 export interface Spawn {
@@ -173,25 +173,19 @@ function settleCornered(s: FightState): boolean {
 }
 
 /**
- * Each telegraph re-checks legality at resolve time. Blocking a thistle
- * head-on genuinely stops it — pawns can't capture forward. But a slider
- * whose committed square is walled off still lunges at the first critter that
- * stepped into its lane: interposing a capturable piece costs you that piece,
- * it isn't a free block.
+ * Each telegraph re-checks legality at resolve time and resolves against the
+ * board as it stands now — see landingFor. Blocking a thistle head-on still
+ * stops it (pawns can't capture forward), but you can't cheat a slider by
+ * feeding a piece into its lane or by sliding the target along it.
  */
 function resolveTelegraphs(s: FightState) {
   for (const t of s.telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e || !t.to) continue;
-    const legal = movesFor(s, e);
-    let to = t.to;
-    if (!legal.some((m) => m.x === to.x && m.y === to.y)) {
-      const cut = interposer(s, e, t.to, legal);
-      if (!cut) {
-        s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
-        continue;
-      }
-      to = cut; // the slider stops on — and takes — whatever cut it off
+    const to = landingFor(s, e, t.to);
+    if (!to) {
+      s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
+      continue;
     }
     const occ = pieceAt(s, to.x, to.y);
     if (occ && occ.side === 'friend') {
@@ -223,28 +217,38 @@ function resolveTelegraphs(s: FightState) {
 }
 
 /**
- * When a slider's committed square is unreachable, the friend it stops on: the
- * nearest one along the committed ray that it can legally take. Straight lines
- * only — a leaper can't be interposed at all, and a pawn's forward push isn't a
- * capture, so neither yields an interposer (both stay genuinely blocked).
+ * Where a committed telegraph actually resolves against the current board, or
+ * null if the piece is genuinely walled off (it stays put — "blocked").
+ *
+ * A slider travels its committed ray and takes the *first* friend on the lane:
+ * one that stepped into the path (interposition) or the target that slid along
+ * the lane to dodge — you can't escape a lane by staying on it, and it reaches a
+ * far one no stepper could. The first own-side piece (or the board edge) ends
+ * the lane. With no friend to catch, it lands on the telegraphed square if that
+ * move is still legal. Steppers, leapers and pawns can't pursue: they only take
+ * a friend sitting on the exact aimed square, else land there if still legal.
  */
-function interposer(s: FightState, e: Piece, aim: Vec, legal: Vec[]): Vec | null {
+function landingFor(s: FightState, e: Piece, aim: Vec): Vec | null {
+  const legal = movesFor(s, e);
+  const aimHit = legal.some((m) => m.x === aim.x && m.y === aim.y) ? aim : null;
   const dx = Math.sign(aim.x - e.x);
   const dy = Math.sign(aim.y - e.y);
   const straight = dx === 0 || dy === 0 || Math.abs(aim.x - e.x) === Math.abs(aim.y - e.y);
-  if (!straight) return null;
+  if (!straight) return aimHit; // leapers have no lane to walk
+
   let x = e.x + dx;
   let y = e.y + dy;
-  for (;;) {
+  while (inBounds(s, x, y)) {
     const occ = pieceAt(s, x, y);
     if (occ) {
-      // first blocker: take it only if it's a friend this piece can actually land on
-      return occ.side === 'friend' && legal.some((m) => m.x === x && m.y === y) ? { x, y } : null;
+      // reach only matters for a slider; the legal check gates steppers/pawns out
+      if (occ.side === 'friend' && legal.some((m) => m.x === x && m.y === y)) return { x, y };
+      break; // own side, or a friend it can't take: the lane ends here
     }
-    if (x === aim.x && y === aim.y) return null; // reached the aim with nothing to hit
     x += dx;
     y += dy;
   }
+  return aimHit;
 }
 
 /** First free square on the friends' home row (skipping where the enemy lands). */
