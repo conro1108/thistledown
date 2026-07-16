@@ -137,8 +137,9 @@ Slay-the-Spire-shaped, kept simple:
   free recruit.
 - **Trinkets** (relics): run-defining passives. *Dandelion Cloak* — once per fight, a
   captured friend instead retreats to your back rank. *Acorn Whistle* — Hoppers can
-  make a plain one-step move. *Second Breakfast* — your first move each fight can be
-  two moves. Aim for ~30 at launch.
+  make a plain one-step move. *Second Breakfast* — your first move each fight comes
+  with an extra non-capturing move (a stretch, not a snatch — the full double-move
+  version proved wildly OP). Aim for ~30 at launch.
 - **Upgrades to movement** are the most interesting design space: a Sprout that can
   also step diagonally forward, a Rumble that can turn one corner mid-charge, a Slink
   that hops over one friendly. Each upgrade is a *variant* of the real piece — players

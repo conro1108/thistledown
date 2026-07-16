@@ -73,7 +73,10 @@ function forward(p: Piece): number {
 
 /** Legal destinations: empty squares, or squares holding the other side. */
 export function movesFor(s: FightState, p: Piece): Vec[] {
-  return squaresFor(s, p, false);
+  const out = squaresFor(s, p, false);
+  // Second Breakfast's extra move is a stretch, not a snatch — no captures
+  if (s.freeMoveActive && p.side === 'friend') return out.filter((v) => !pieceAt(s, v.x, v.y));
+  return out;
 }
 
 /**

@@ -407,7 +407,7 @@ export const TRINKETS: Record<TrinketId, { title: string; icon: string; blurb: s
   breakfast: {
     title: 'Second Breakfast',
     icon: '🥞',
-    blurb: 'Your first move each clearing can be two moves.',
+    blurb: 'Once each clearing, your first move comes with a second helping — an extra move that can’t snatch anything.',
   },
 };
 

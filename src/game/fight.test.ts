@@ -105,6 +105,23 @@ describe('fight loop', () => {
     expect(takeFreeMove(plain)).toBe(false);
   });
 
+  it('Second Breakfast: the extra move is a stretch, not a snatch', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'rumble', x: 2, y: 5 }],
+      [{ kind: 'thistle', x: 2, y: 0 }, { kind: 'thistle', x: 5, y: 0 }],
+      1,
+      6,
+      6,
+      { secondBreakfast: true },
+    );
+    expect(playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 })).toBe(true);
+    expect(takeFreeMove(s)).toBe(true);
+    // the rumble could take the thistle up column 2 — but not on a free move
+    expect(playerMove(s, idAt(s, 2, 5), { x: 2, y: 0 })).toBe(false);
+    expect(playerMove(s, idAt(s, 2, 5), { x: 2, y: 1 })).toBe(true);
+    expect(s.freeMoveActive).toBe(false); // captures come back after the stretch
+  });
+
   it('Acorn Whistle: a sprout promoting into a hopper comes out spry', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 5, y: 1 }],

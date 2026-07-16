@@ -715,7 +715,7 @@ function proceedAfterPlayerAction() {
     return;
   }
   if (!sess.resolveDue) {
-    hintEl.textContent = 'Second Breakfast! 🥞 Take one more move.';
+    hintEl.textContent = 'Second Breakfast! 🥞 One more move — a stretch, not a snatch.';
     refreshHud();
     maybeAutoWait();
     return;

@@ -115,6 +115,8 @@ export interface FightState {
   cloakLeft: number;
   /** Second Breakfast: extra player moves banked for this fight */
   freeMoves: number;
+  /** mid-extra-move: the Second Breakfast step is a stretch, not a snatch — no captures */
+  freeMoveActive: boolean;
   /** Acorn Whistle is along (mid-fight promotions to hopper come out spry) */
   whistle: boolean;
 }

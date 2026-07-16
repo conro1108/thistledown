@@ -71,6 +71,7 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     pendingPromotion: null,
     cloakLeft: cfg.cloak ? 1 : 0,
     freeMoves: cfg.secondBreakfast ? 1 : 0,
+    freeMoveActive: false,
     whistle: !!cfg.whistle,
   };
   assignTelegraphs(s);
@@ -96,6 +97,7 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
   const p = s.pieces.find((q) => q.id === pieceId);
   if (!p || p.side !== 'friend') return false;
   if (!movesFor(s, p).some((m) => m.x === to.x && m.y === to.y)) return false;
+  s.freeMoveActive = false;
 
   const occ = pieceAt(s, to.x, to.y);
   if (occ) {
@@ -144,6 +146,7 @@ export function promote(s: FightState, kind: PromotionKind): boolean {
 export function takeFreeMove(s: FightState): boolean {
   if (s.status !== 'playing' || s.freeMoves <= 0) return false;
   s.freeMoves--;
+  s.freeMoveActive = true; // the extra move can't capture — see movesFor
   return true;
 }
 
@@ -162,6 +165,7 @@ export function playerHasMove(s: FightState): boolean {
  */
 export function resolveEnemyTurn(s: FightState) {
   if (s.status !== 'playing' || s.pendingPromotion != null) return;
+  s.freeMoveActive = false; // an unspent stretch doesn't outlive the turn
   resolveTelegraphs(s);
   if (s.status !== 'playing') return;
   // a minion can wall off the heart's last free escape mid-turn
