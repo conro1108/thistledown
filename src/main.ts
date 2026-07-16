@@ -711,12 +711,20 @@ function selectPiece(pieceId: number) {
   refreshHud();
 }
 
-/** describe(), plus what a tapped enemy's temperament means for its arrow. */
-function describeInFight(p: { kind: Kind; side: string; veiled?: boolean; fickle?: boolean }): string {
+/** describe(), plus what a tapped piece's quirks mean on the board. */
+function describeInFight(p: {
+  kind: Kind;
+  side: string;
+  veiled?: boolean;
+  fickle?: boolean;
+  spry?: boolean;
+}): string {
   let txt = describe(p.kind);
   if (p.side === 'bramble') {
     if (p.veiled) txt += ' Shrouded — no arrow. The lit squares are everywhere it could strike.';
     else if (p.fickle) txt += ' Fickle — two arrows, and it takes whichever looks tastier.';
+  } else if (p.spry) {
+    txt += ' Spry 🍯 — may also take a plain one-step, any direction. A stroll, never a pounce.';
   }
   return txt;
 }
