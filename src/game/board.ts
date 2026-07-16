@@ -61,6 +61,11 @@ export function pieceAt(s: FightState, x: number, y: number): Piece | undefined 
   return s.pieces.find((p) => p.x === x && p.y === y);
 }
 
+/** Sprout/thistle: forward-only movers, diagonal-only capturers. */
+export function isPawn(kind: Kind): boolean {
+  return MOVERS[kind].pawn === true;
+}
+
 /** Friends walk up the board (-y), the bramble creeps down (+y). */
 function forward(p: Piece): number {
   return p.side === 'friend' ? -1 : 1;

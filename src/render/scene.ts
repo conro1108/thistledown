@@ -1,4 +1,4 @@
-import { movesFor, pieceAt, threatsFor } from '../game/board';
+import { isPawn, movesFor, pieceAt, threatsFor } from '../game/board';
 import type { FightState, Telegraph, Vec } from '../game/types';
 import { drawSprite } from './sprites';
 
@@ -73,7 +73,9 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
 
   // hover: everywhere the tapped creature could reach — deliberately styled
   // apart from the committed-attack marker (soft wash + center dot, no
-  // corners/arrow) so "could pounce here" never reads as "will move here"
+  // corners/arrow) so "could pounce here" never reads as "will move here".
+  // Pawns' empty diagonals aren't shown — an empty square nothing can be
+  // taken from reads as noise, not information.
   if (v.hover) {
     const p = pieceAt(s, v.hover.x, v.hover.y);
     if (p) {
@@ -81,6 +83,7 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       const wash = bramble ? 'rgba(224, 122, 82, 0.22)' : 'rgba(120, 170, 255, 0.22)';
       const dot = bramble ? '#e07a52' : '#78aaff';
       for (const t of threatsFor(s, p)) {
+        if (isPawn(p.kind) && t.x !== p.x && !pieceAt(s, t.x, t.y)) continue;
         ctx.fillStyle = wash;
         ctx.fillRect(t.x * TILE + 1, t.y * TILE + 1, TILE - 2, TILE - 2);
         ctx.fillStyle = dot;
