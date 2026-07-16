@@ -73,8 +73,8 @@ button, input, textarea, select { font-family: inherit; }
   justify-content: center;
   padding: 18px 10px 4px;
   overflow: hidden;
-  /* sky-blue fallback for the sliver the pixel backdrop hasn't painted yet */
-  background: #a8dcec;
+  /* dusk-sky fallback for the sliver the pixel backdrop hasn't painted yet */
+  background: #171424;
 }
 
 #backdrop {
@@ -92,10 +92,10 @@ canvas {
 }
 
 #board {
-  border: 3px solid var(--wood);
+  border: 3px solid #4a3527;
   border-radius: 4px;
-  background: #9cc568;
-  box-shadow: 0 3px 0 rgba(74, 53, 39, 0.3);
+  background: #87aa56;
+  box-shadow: 0 0 14px 3px rgba(0, 0, 0, 0.35);
 }
 
 /* ---------- status banner: the game talks to you here, in the thumb zone ---------- */

@@ -23,8 +23,8 @@ export interface View {
   telegraphOverride?: Telegraph[];
 }
 
-const GRASS_A = '#9cc568';
-const GRASS_B = '#90ba5c';
+const GRASS_A = '#87aa56';
+const GRASS_B = '#7b9e4b';
 
 export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time: number) {
   // ground — plain grass for now; decorate later
@@ -97,15 +97,9 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     const pos = v.posOverrides?.get(p.id) ?? p;
     const px = Math.round(pos.x * TILE);
     const py = Math.round(pos.y * TILE);
-    // soft ground shadow under the feet, tinted by team: honey for friends,
-    // dusk for the bramble. Drawn *before* the sprite so the feet overlap its
-    // top row — grounded in the grass, not standing on a plate. The dotted
-    // tips melt the ends into the turf.
-    ctx.fillStyle = p.side === 'friend' ? '#e3d089' : '#5e4f85';
-    ctx.fillRect(px + 4, py + 13, 8, 1);
-    ctx.fillRect(px + 5, py + 14, 6, 1);
-    ctx.fillRect(px + 2, py + 13, 1, 1);
-    ctx.fillRect(px + 13, py + 13, 1, 1);
+    // no ground marker — the sprites themselves carry the team read
+    // (warm critters vs. dusky plants), and anything painted under the feet
+    // ends up looking like a plinth
     const bob = (Math.floor(time / 450) + p.id) % 2 === 0 ? 0 : -1;
     drawSprite(ctx, p.kind, px + 2, py + 2 + bob);
   }
