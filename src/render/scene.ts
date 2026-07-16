@@ -45,7 +45,12 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       sleepGlyph(ctx, e.x, e.y);
       continue;
     }
-    const targetsFriend = pieceAt(s, t.to.x, t.to.y)?.side === 'friend';
+    // red only for a real attack: a friend on the target square that this
+    // enemy actually threatens. A friend merely blocking a pawn's forward
+    // step stays purple — that arrow is going to bonk, not bite.
+    const occ = pieceAt(s, t.to.x, t.to.y);
+    const targetsFriend =
+      occ?.side === 'friend' && threatsFor(s, e).some((q) => q.x === t.to!.x && q.y === t.to!.y);
     const col = targetsFriend ? '#e05252' : '#7a5fae';
     const from = v.posOverrides?.get(e.id) ?? e;
     arrow(ctx, from, t.to, col);
@@ -66,14 +71,20 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     }
   }
 
-  // hover: show what the hovered creature can reach
+  // hover: everywhere the tapped creature could reach — deliberately styled
+  // apart from the committed-attack marker (soft wash + center dot, no
+  // corners/arrow) so "could pounce here" never reads as "will move here"
   if (v.hover) {
     const p = pieceAt(s, v.hover.x, v.hover.y);
     if (p) {
-      const col = p.side === 'bramble' ? 'rgba(224, 82, 82, 0.30)' : 'rgba(120, 170, 255, 0.30)';
+      const bramble = p.side === 'bramble';
+      const wash = bramble ? 'rgba(224, 122, 82, 0.22)' : 'rgba(120, 170, 255, 0.22)';
+      const dot = bramble ? '#e07a52' : '#78aaff';
       for (const t of threatsFor(s, p)) {
-        ctx.fillStyle = col;
+        ctx.fillStyle = wash;
         ctx.fillRect(t.x * TILE + 1, t.y * TILE + 1, TILE - 2, TILE - 2);
+        ctx.fillStyle = dot;
+        ctx.fillRect(t.x * TILE + 7, t.y * TILE + 7, 2, 2);
       }
     }
   }

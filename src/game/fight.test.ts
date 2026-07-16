@@ -352,6 +352,72 @@ describe('fight loop', () => {
     expect(s.turn).toBe(2);
   });
 
+  it('the Heart flees at resolve when your move covers its square (the king rule)', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 3, y: 3 }, { kind: 'rumble', x: 2, y: 2 }],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    // the heart commits to drifting toward the keeper…
+    expect(s.telegraphs.find((t) => t.pieceId === idAt(s, 0, 0))!.to).toEqual({ x: 1, y: 1 });
+    // …then the rumble slides to (2,0), covering the heart's square mid-round
+    playerMove(s, idAt(s, 2, 2), { x: 2, y: 0 });
+    expect(s.status).toBe('playing'); // checked, not cornered — (0,1) and (1,1) are open
+    resolveEnemyTurn(s);
+    const h = s.pieces.find((p) => p.kind === 'heart')!;
+    expect({ x: h.x, y: h.y }).toEqual({ x: 1, y: 1 }); // it scrambled out, toward the keeper
+    expect(s.events.some((ev) => ev.type === 'flee' && ev.kind === 'heart')).toBe(true);
+  });
+
+  it('the Heart balks at resolve rather than stepping onto a square you just covered', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 3, y: 3 }, { kind: 'rumble', x: 2, y: 3 }],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    // committed to (1,1) while it was safe…
+    expect(s.telegraphs.find((t) => t.pieceId === idAt(s, 0, 0))!.to).toEqual({ x: 1, y: 1 });
+    // …then the rumble slides to (1,3) and covers the whole 1-column
+    playerMove(s, idAt(s, 2, 3), { x: 1, y: 3 });
+    resolveEnemyTurn(s);
+    expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 0, y: 0 }); // it stayed put
+    expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'heart')).toBe(true);
+    expect(s.status).toBe('playing');
+  });
+
+  it('capturing a telegraphed enemy is a stolen turn — a tempo event fires', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 2, y: 3 }],
+      [
+        { kind: 'thistle', x: 1, y: 1 }, // nearest the keeper: it gets the telegraph
+        { kind: 'thistle', x: 4, y: 1 },
+      ],
+      1,
+    );
+    expect(s.telegraphs[0].pieceId).toBe(idAt(s, 1, 1));
+    playerMove(s, idAt(s, 2, 3), { x: 1, y: 1 });
+    expect(s.events.some((ev) => ev.type === 'tempo' && ev.kind === 'thistle')).toBe(true);
+  });
+
+  it('capturing an idle enemy is a plain capture, not a stolen turn', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 3, y: 3 }],
+      [
+        { kind: 'thistle', x: 1, y: 1 },
+        { kind: 'thistle', x: 4, y: 1 }, // not telegraphed this round
+      ],
+      1,
+    );
+    expect(s.telegraphs[0].pieceId).toBe(idAt(s, 1, 1));
+    playerMove(s, idAt(s, 3, 3), { x: 4, y: 1 });
+    expect(s.events.some((ev) => ev.type === 'capture')).toBe(true);
+    expect(s.events.some((ev) => ev.type === 'tempo')).toBe(false);
+  });
+
   it('capturing a telegraphed enemy cancels its telegraph', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 2, y: 3 }],

@@ -71,7 +71,9 @@ ever sit down at a real board, it will feel familiar. That's the whole con.
 - Enemy intent shown as a ghosted arrow/square. Early enemies commit to their telegraph;
   later regions introduce enemies that pick between two telegraphed options, then
   "clever" ones that re-aim if you block them (a gentle on-ramp toward opponents who
-  respond to you — i.e., toward chess).
+  respond to you — i.e., toward chess). Capturing the enemy that was about to move
+  **steals the bramble's turn** — that's the Into the Breach reward loop, and the game
+  celebrates it loudly rather than letting it read as the AI doing nothing.
 - **Captured friends aren't dead** — they're out for the rest of the fight and come back
   "shaken" (skip the next fight unless you spend a campfire treat on them). Losing your
   Keeper ends the run.
@@ -97,8 +99,10 @@ Recruit order across a run roughly follows real chess piece values, so power pro
 and chess intuition align for free: pawns → knight/bishop → rook → queen.
 
 Each critter has **personality** (Cozy Sprites DNA): idle animations, one-liners at the
-campfire, a favorite snack. Duplicates are fine and get names (two Sprouts: "Pickle" and
-"Other Pickle").
+campfire, a favorite snack. Names ("Pickle", "Other Pickle") are **campfire flavor
+only** — the fight UI and all mechanics speak in critter types ("a Sprout", "your
+Hopper"), because that's how players actually think and it's the vocabulary that maps
+to pieces. Nobody buffs "Waddle"; they buff a Sprout.
 
 ## The enemy: the Bramble
 
@@ -112,7 +116,10 @@ critters-vs-critters:
 - **The Gloom** — queen-mover, region 3+ miniboss tier
 - **Bramble Hearts** — bosses. Can't be captured; you win by leaving them **no safe
   square** (checkmate), or by fight-specific gimmicks (sever the three roots feeding it,
-  etc.). Boss fights are where mating-net intuition gets built.
+  etc.). Boss fights are where mating-net intuition gets built. The Heart plays by the
+  **king rule at resolve time**: its telegraph is intent, not a promise — threaten its
+  square and it flees immediately; cover its destination and it balks. Checks are
+  forcing moves, which is what makes the mating net teachable.
 - Spice enemies that break chess on purpose: a **Sundew** that doesn't move but pulls
   the nearest critter one square closer each turn; **Spore puffs** that split when
   captured; a **Cuckoo** that copies the movement of the last critter you moved.

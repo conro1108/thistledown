@@ -17,22 +17,18 @@ const SAVE_KEY = 'overgrown.save.v1';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
-    <div id="hud-row"><span id="fightname">Overgrown</span><span id="trinkets"></span><span id="turn"></span></div>
-    <div id="goal"></div>
-    <div id="legend">
-      <span><i class="sw go"></i>your moves</span>
-      <span><i class="sw move"></i>their move</span>
-      <span><i class="sw hit"></i>their attack!</span>
-    </div>
+    <span id="fightname">Overgrown</span><span id="trinkets"></span>
   </header>
   <div id="board-area">
     <div class="sun"></div>
     <div id="board-wrap" class="idle">
-      <div id="phaseflag"></div>
       <canvas id="board" width="96" height="96"></canvas>
     </div>
   </div>
-  <div id="hint"></div>
+  <div id="status">
+    <div id="status-line"></div>
+    <div id="hint"></div>
+  </div>
   <div id="roster"></div>
   <div id="overlay" class="hidden"></div>
 `;
@@ -41,10 +37,9 @@ const canvas = document.querySelector<HTMLCanvasElement>('#board')!;
 const ctx = canvas.getContext('2d')!;
 const boardAreaEl = document.querySelector<HTMLDivElement>('#board-area')!;
 const hudName = document.querySelector<HTMLSpanElement>('#fightname')!;
-const hudTurn = document.querySelector<HTMLSpanElement>('#turn')!;
-const goalEl = document.querySelector<HTMLDivElement>('#goal')!;
 const trinketsEl = document.querySelector<HTMLSpanElement>('#trinkets')!;
-const phaseFlagEl = document.querySelector<HTMLDivElement>('#phaseflag')!;
+const statusEl = document.querySelector<HTMLDivElement>('#status')!;
+const statusLineEl = document.querySelector<HTMLDivElement>('#status-line')!;
 const hintEl = document.querySelector<HTMLDivElement>('#hint')!;
 const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
 const overlayEl = document.querySelector<HTMLDivElement>('#overlay')!;
@@ -67,6 +62,8 @@ let tweenDur = TWEEN_MS;
 let frozenTelegraphs: Telegraph[] | null = null;
 /** set while resolving if something noteworthy happened — shown as the next hint */
 let blockedNote: string | null = null;
+/** the enemy the player just caught mid-lunge (its telegraph died with it) */
+let tempoKind: Kind | null = null;
 
 // ---------- session & save ----------
 
@@ -131,7 +128,10 @@ function showOverlay(title: string, body: string, choices: Choice[]) {
 // ---------- run flow ----------
 
 function title() {
-  const saved = loadSave();
+  // a run you never actually played (no moves yet) isn't worth resuming —
+  // don't make the player choose between two identical fresh starts
+  const loaded = loadSave();
+  const saved = loaded && loaded.log.some((e) => e.t === 'move') ? loaded : null;
   const choices: Choice[] = [];
   if (saved) {
     const friends = saved.run.companions.filter((c) => !c.shaken).length + 1;
@@ -229,6 +229,7 @@ function enterFight(resume: boolean) {
   tweens = [];
   frozenTelegraphs = null;
   blockedNote = null;
+  tempoKind = null;
   canvas.width = fight.w * TILE;
   canvas.height = fight.h * TILE;
   document.querySelector('#board-wrap')!.classList.remove('idle');
@@ -266,9 +267,9 @@ function endOfFightUi() {
     return;
   }
   // stage 'post': clearing won, maybe a recruit is watching
-  const shakenNames = run.companions.filter((c) => c.shaken).map((c) => c.name);
-  const shakenNote = shakenNames.length
-    ? ` ${shakenNames.join(' and ')} ${shakenNames.length > 1 ? 'are' : 'is'} a bit shaken and will sit the next one out.`
+  const shaken = run.companions.filter((c) => c.shaken).map((c) => c.kind);
+  const shakenNote = shaken.length
+    ? ` ${listKinds(shaken)} ${shaken.length > 1 ? 'are' : 'is'} a bit shaken and will sit the next one out.`
     : '';
   const body = `The brambles scatter into flowers.${shakenNote}`;
 
@@ -355,13 +356,13 @@ function trinketFound() {
 
 function campStop() {
   if (!sess || !run) return;
-  const shaken = run.companions.filter((c) => c.shaken).map((c) => c.name);
+  const shaken = run.companions.filter((c) => c.shaken).map((c) => c.kind);
   const snackable = run.companions.some((c) => !c.spry);
   const choices: Choice[] = [];
   if (shaken.length) {
     choices.push({
       label: 'Warm mash 🍲',
-      sub: `${shaken.join(' and ')} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
+      sub: `${listKinds(shaken)} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
       fn: () => {
         doEntry({ t: 'heal' });
         stageUi();
@@ -409,8 +410,8 @@ function honeycakeChoice() {
       .map((c, i) => ({ c, i }))
       .filter(({ c }) => !c.spry)
       .map(({ c, i }) => ({
-        label: c.name,
-        sub: `${KIND_INFO[c.kind].title} — gains a plain one-step move in any direction.`,
+        label: `A ${KIND_INFO[c.kind].title}`,
+        sub: 'Gains a plain one-step move in any direction — for good.',
         fn: () => {
           doEntry({ t: 'snack', idx: i });
           stageUi();
@@ -457,26 +458,26 @@ function promotionChoice() {
 
 function phaseLabel(): string {
   if (!fight) return '';
-  if (fight.status === 'lost') return 'lantern out';
-  if (fight.status === 'won') return 'clearing won!';
+  if (fight.status === 'lost') return '💤 the lantern goes out';
+  if (fight.status === 'won') return '🌼 clearing won!';
   return phase === 'enemy' ? '🌱 the bramble moves…' : `🌼 your move · turn ${fight.turn}`;
+}
+
+/** The short tail of the status line: what's left to do. */
+function goalLabel(): string {
+  if (!fight || fight.status !== 'playing') return '';
+  const heart = fight.pieces.find((p) => p.kind === 'heart');
+  const left = enemies(fight).length - (heart ? 1 : 0);
+  if (heart) return left ? `🌿 ${left} guard${left > 1 ? 's' : ''}` : 'corner the Heart!';
+  return `🌿 ${left} to catch`;
 }
 
 function refreshHud() {
   if (!run || !fight) return;
-  hudName.textContent = `${fight.name} (${run.fightIndex + 1}/${FIGHTS.length})`;
-  hudTurn.textContent = phaseLabel();
-  hudTurn.className = fight.status !== 'playing' ? 'done' : phase;
-  const heart = fight.pieces.find((p) => p.kind === 'heart');
-  const left = enemies(fight).length - (heart ? 1 : 0);
-  goalEl.textContent =
-    fight.status === 'won'
-      ? 'Clearing won! 🌼'
-      : heart
-        ? `Corner the Bramble Heart — nowhere safe to step!${left ? ` 🌿 ${left} guards` : ''}`
-        : `${OBJECTIVE} 🌿 ${left} left`;
-  phaseFlagEl.textContent = phase === 'enemy' ? "🌱 the bramble's move" : '';
-  phaseFlagEl.classList.toggle('show', phase === 'enemy' && fight.status === 'playing');
+  hudName.textContent = `${fight.name} · ${run.fightIndex + 1}/${FIGHTS.length}`;
+  const goal = goalLabel();
+  statusLineEl.textContent = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
+  statusEl.className = fight.status !== 'playing' ? fight.status : phase;
   trinketsEl.innerHTML = '';
   for (const id of run.trinkets) {
     const t = document.createElement('span');
@@ -490,20 +491,22 @@ function refreshHud() {
 function renderRoster() {
   rosterEl.innerHTML = '';
   if (!run || !fight) return;
-  rosterEl.append(rosterButton('The Keeper', 'keeper', 1, false));
+  rosterEl.append(rosterButton('keeper', 1, false));
   for (let i = 0; i < run.companions.length; i++) {
     const c = run.companions[i];
     const pieceId = companionPieceId.get(i);
     const alive = pieceId != null && fight.pieces.some((p) => p.id === pieceId);
     rosterEl.append(
-      rosterButton(c.name, c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? '💤' : c.spry ? '🍯' : undefined),
+      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? '💤' : c.spry ? '🍯' : undefined),
     );
   }
 }
 
-function rosterButton(name: string, kind: Kind, pieceId: number, disabled: boolean, badge?: string): HTMLButtonElement {
+/** A small chip: sprite + critter type. Board taps are the main way to select;
+ * these are just a legible "who's in the band" strip that happens to be tappable. */
+function rosterButton(kind: Kind, pieceId: number, disabled: boolean, badge?: string): HTMLButtonElement {
   const b = document.createElement('button');
-  b.className = 'roster-btn' + (selected === pieceId ? ' selected' : '');
+  b.className = 'chip' + (selected === pieceId ? ' selected' : '');
   b.disabled = disabled || phase !== 'player' || !fight || fight.status !== 'playing';
   const mini = document.createElement('canvas');
   mini.className = 'mini';
@@ -512,15 +515,9 @@ function rosterButton(name: string, kind: Kind, pieceId: number, disabled: boole
   drawSprite(mini.getContext('2d')!, kind, 0, 0);
   b.append(mini);
   const label = document.createElement('span');
-  label.className = 'rb-name';
-  label.textContent = badge ? `${name} ${badge}` : name;
+  const title = kind === 'keeper' ? 'Keeper' : KIND_INFO[kind].title;
+  label.textContent = badge ? `${title} ${badge}` : title;
   b.append(label);
-  if (KIND_INFO[kind].title !== name) {
-    const sub = document.createElement('span');
-    sub.className = 'rb-kind';
-    sub.textContent = KIND_INFO[kind].title;
-    b.append(sub);
-  }
   b.onclick = () => selectPiece(pieceId);
   return b;
 }
@@ -528,6 +525,15 @@ function rosterButton(name: string, kind: Kind, pieceId: number, disabled: boole
 function describe(kind: Kind): string {
   const info = KIND_INFO[kind];
   return `${info.title}: ${info.blurb}`;
+}
+
+/** "a Sprout and 2 Hoppers" — companions listed by type, names are campfire flavor only. */
+function listKinds(kinds: Kind[]): string {
+  const counts = new Map<Kind, number>();
+  for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
+  return [...counts]
+    .map(([k, n]) => (n > 1 ? `${n} ${KIND_INFO[k].title}s` : `a ${KIND_INFO[k].title}`))
+    .join(' and ');
 }
 
 // ---------- selection & movement ----------
@@ -589,10 +595,17 @@ function beginEnemyTurn() {
   if (!fight) return;
   phase = 'enemy';
   const snapTelegraphs = fight.telegraphs.map((t) => ({ ...t }));
-  // "nothing will move" is its own beat: walled-off brambles, or the Heart
-  // digging in — say it out loud instead of playing a silent pause
+  // "nothing will move" is its own beat: walled-off brambles, the Heart
+  // digging in — or a mover you just caught. Say it out loud, don't play a
+  // silent pause; a stolen turn especially deserves its fanfare.
   const anyAction = snapTelegraphs.some((t) => t.to);
-  hintEl.textContent = anyAction ? "Watch the bramble's move…" : 'The bramble stirs…';
+  const stolen = tempoKind ? KIND_INFO[tempoKind].title : null;
+  tempoKind = null;
+  hintEl.textContent = stolen
+    ? `You caught the ${stolen} mid-lunge! 🌼`
+    : anyAction
+      ? "Watch the bramble's move…"
+      : 'The bramble stirs…';
   refreshHud();
 
   const snapPositions = new Map<number, Vec>(
@@ -602,18 +615,23 @@ function beginEnemyTurn() {
 
   setTimeout(() => {
     if (!fight) return;
-    blockedNote = anyAction ? null : 'The bramble holds still — nothing moves this turn. Go!';
+    blockedNote = anyAction
+      ? stolen
+        ? `You caught the ${stolen} mid-lunge — one less move against you!`
+        : null
+      : stolen
+        ? `You caught the ${stolen} mid-lunge — the bramble loses its whole turn! 🌼`
+        : 'The bramble holds still — nothing moves this turn. Go!';
     doEntry({ t: 'resolve' });
     drainEvents();
 
+    // tween every bramble piece that actually ended up somewhere new — the
+    // Heart can bolt off a null telegraph, so go by positions, not telegraphs
     tweens = [];
-    for (const t of snapTelegraphs) {
-      if (!t.to) continue;
-      const from = snapPositions.get(t.pieceId);
-      const stillThere = fight.pieces.find((p) => p.id === t.pieceId);
-      if (!from || !stillThere) continue;
-      if (stillThere.x !== from.x || stillThere.y !== from.y) {
-        tweens.push({ id: t.pieceId, from, to: { x: stillThere.x, y: stillThere.y } });
+    for (const [id, from] of snapPositions) {
+      const p = fight.pieces.find((q) => q.id === id);
+      if (p && (p.x !== from.x || p.y !== from.y)) {
+        tweens.push({ id, from, to: { x: p.x, y: p.y } });
       }
     }
     tweenStart = performance.now();
@@ -683,7 +701,16 @@ function drainEvents() {
   for (const ev of fight.events) {
     if (ev.type === 'blocked') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
-      blockedNote = `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`;
+      blockedNote =
+        ev.kind === 'heart'
+          ? 'The Bramble Heart balks — it won’t step where you’re watching!'
+          : `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`;
+    } else if (ev.type === 'tempo') {
+      fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      tempoKind = ev.kind;
+    } else if (ev.type === 'flee') {
+      fx.push({ at: ev.at, kind: 'shaken', t: 0 });
+      blockedNote = 'Your trap springs — the Bramble Heart scrambles for safety!';
     } else if (ev.type === 'cornered') {
       fx.push({ at: ev.at, kind: 'poof', t: 0 });
     } else if (ev.type === 'cloaked') {

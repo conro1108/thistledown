@@ -35,72 +35,24 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
-/* ---------- header ---------- */
+/* ---------- header: one slim line ---------- */
 
 #hud {
   flex-shrink: 0;
-  padding: 10px 14px 6px;
-}
-
-#hud-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
+  padding: 8px 14px 6px;
 }
 
+#fightname { font-weight: bold; color: var(--accent); font-size: 14px; }
+
 #trinkets {
-  margin-left: auto;
   display: flex;
   gap: 4px;
   font-size: 14px;
 }
-
-#fightname { font-weight: bold; color: var(--accent); font-size: 15px; }
-#turn {
-  color: var(--dim);
-  font-size: 12px;
-  white-space: nowrap;
-  padding: 2px 8px;
-  border-radius: 9px;
-  border: 1px solid transparent;
-  transition: background 0.15s, color 0.15s;
-}
-#turn.player {
-  color: var(--go);
-  background: rgba(255, 217, 102, 0.12);
-  border-color: rgba(255, 217, 102, 0.4);
-}
-#turn.enemy {
-  color: #cdb8f0;
-  background: rgba(122, 95, 174, 0.25);
-  border-color: rgba(122, 95, 174, 0.6);
-}
-
-#goal {
-  margin-top: 4px;
-  font-size: 12.5px;
-  font-weight: bold;
-  color: var(--accent);
-  background: rgba(255, 209, 102, 0.08);
-  border: 1px solid rgba(255, 209, 102, 0.25);
-  border-radius: 6px;
-  padding: 3px 8px;
-  min-height: 1.6em;
-}
-
-#legend {
-  margin-top: 6px;
-  display: flex;
-  gap: 12px;
-  font-size: 10px;
-  color: var(--dim);
-}
-#legend span { display: inline-flex; align-items: center; gap: 4px; }
-.sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-.sw.go { background: var(--go); }
-.sw.move { background: var(--move); }
-.sw.hit { background: var(--hit); }
 
 /* ---------- board ---------- */
 
@@ -164,99 +116,85 @@ canvas {
   touch-action: none;
 }
 
-#phaseflag {
-  position: absolute;
-  top: -11px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--move);
-  color: var(--ink);
-  font-size: 10px;
-  padding: 2px 10px;
-  border-radius: 8px;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.15s;
-  pointer-events: none;
-}
-#phaseflag.show { opacity: 1; }
+/* ---------- status banner: the game talks to you here, in the thumb zone ---------- */
 
-/* ---------- hint ---------- */
+#status {
+  flex-shrink: 0;
+  margin: 8px 10px 0;
+  padding: 7px 12px 8px;
+  text-align: center;
+  background: var(--panel);
+  border: 2px solid #4a4258;
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+#status.player { border-color: rgba(255, 217, 102, 0.7); background: #37311f; }
+#status.enemy { border-color: rgba(122, 95, 174, 0.9); background: #322a44; }
+#status.won { border-color: #63a86a; background: #263826; }
+#status.lost { border-color: #b05252; background: #3a2626; }
+
+#status-line {
+  /* fixed heights here and on #hint: status text changing must never resize
+     the board area above (that re-triggers the integer rescale = "zooming") */
+  height: 1.5em;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: bold;
+}
+#status.player #status-line { color: var(--go); }
+#status.enemy #status-line { color: #cdb8f0; }
+#status.won #status-line { color: #9fdca4; }
+#status.lost #status-line { color: #e08a8a; }
 
 #hint {
-  flex-shrink: 0;
-  /* fixed height: hint text changing lines must not resize the board area
-     above it (that re-triggers the integer rescale and reads as zooming) */
-  height: 3.2em;
+  height: 2.9em;
   overflow: hidden;
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.4;
-  text-align: center;
-  margin: 8px 12px 0;
-  padding: 8px 14px;
-  background: var(--panel);
-  border: 1px solid #4a4258;
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* ---------- roster ---------- */
+/* ---------- roster: small type-first chips ---------- */
 
 #roster {
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   justify-content: center;
-  padding: 6px 10px calc(10px + env(safe-area-inset-bottom));
+  padding: 7px 10px calc(9px + env(safe-area-inset-bottom));
 }
 
-.roster-btn {
-  display: flex;
-  flex-direction: column;
+.chip {
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
   background: var(--panel);
-  border: 2px solid #4a4258;
-  border-radius: 10px;
-  padding: 6px 8px 5px;
-  min-width: 60px;
+  border: 1.5px solid #4a4258;
+  border-radius: 8px;
+  padding: 3px 8px 3px 5px;
   font-family: inherit;
-  cursor: pointer;
-}
-.roster-btn canvas.mini {
-  width: 32px;
-  height: 32px;
-  image-rendering: pixelated;
-}
-.roster-btn .rb-name {
   font-size: 10.5px;
   color: var(--ink);
-  max-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: pointer;
 }
-.roster-btn .rb-kind {
-  font-size: 8.5px;
-  color: var(--dim);
-  max-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.chip canvas.mini {
+  width: 20px;
+  height: 20px;
+  image-rendering: pixelated;
 }
-.roster-btn.selected {
+.chip.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.35);
 }
-.roster-btn:disabled {
-  opacity: 0.4;
+.chip:disabled {
+  opacity: 0.35;
   cursor: default;
 }
-.roster-btn:not(:disabled):active { background: #3c3550; }
+.chip:not(:disabled):active { background: #3c3550; }
 
 /* ---------- overlay ---------- */
 

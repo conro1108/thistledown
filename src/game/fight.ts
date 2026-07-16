@@ -69,9 +69,12 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
 
   const occ = pieceAt(s, to.x, to.y);
   if (occ) {
+    // catching an enemy mid-lunge steals the bramble's move — worth celebrating
+    const hadPlan = s.telegraphs.some((t) => t.pieceId === occ.id && t.to != null);
     s.pieces = s.pieces.filter((q) => q.id !== occ.id);
     s.telegraphs = s.telegraphs.filter((t) => t.pieceId !== occ.id);
     s.events.push({ type: 'capture', at: { x: to.x, y: to.y }, kind: occ.kind });
+    if (hadPlan) s.events.push({ type: 'tempo', at: { x: to.x, y: to.y }, kind: occ.kind });
   }
   p.x = to.x;
   p.y = to.y;
@@ -181,39 +184,69 @@ function settleCornered(s: FightState): boolean {
 function resolveTelegraphs(s: FightState) {
   for (const t of s.telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
-    if (!e || !t.to) continue;
+    if (!e) continue;
+    if (e.kind === 'heart') {
+      resolveHeart(s, e, t.to);
+      if (s.status !== 'playing') return;
+      continue;
+    }
+    if (!t.to) continue;
     const to = landingFor(s, e, t.to);
     if (!to) {
       s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
       continue;
     }
-    const occ = pieceAt(s, to.x, to.y);
-    if (occ && occ.side === 'friend') {
-      const spot = s.cloakLeft > 0 ? cloakSpot(s, to) : null;
-      if (spot) {
-        // Dandelion Cloak: the friend drifts home instead of being caught
-        s.cloakLeft--;
-        occ.x = spot.x;
-        occ.y = spot.y;
-        s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind });
-      } else {
-        s.pieces = s.pieces.filter((p) => p.id !== occ.id);
-        s.events.push({ type: 'shaken', at: { x: to.x, y: to.y }, kind: occ.kind });
-        if (occ.kind === 'keeper') {
-          e.x = to.x;
-          e.y = to.y;
-          s.status = 'lost';
-          return;
-        }
-      }
-      e.x = to.x;
-      e.y = to.y;
-      continue;
-    }
-    e.x = to.x;
-    e.y = to.y;
+    land(s, e, to);
+    if (s.status !== 'playing') return;
   }
   s.telegraphs = [];
+}
+
+/** Land e on `to`, catching (or cloaking) any friend standing there. */
+function land(s: FightState, e: Piece, to: Vec) {
+  const occ = pieceAt(s, to.x, to.y);
+  if (occ && occ.side === 'friend') {
+    const spot = s.cloakLeft > 0 ? cloakSpot(s, to) : null;
+    if (spot) {
+      // Dandelion Cloak: the friend drifts home instead of being caught
+      s.cloakLeft--;
+      occ.x = spot.x;
+      occ.y = spot.y;
+      s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind });
+    } else {
+      s.pieces = s.pieces.filter((p) => p.id !== occ.id);
+      s.events.push({ type: 'shaken', at: { x: to.x, y: to.y }, kind: occ.kind });
+      if (occ.kind === 'keeper') s.status = 'lost';
+    }
+  }
+  e.x = to.x;
+  e.y = to.y;
+}
+
+/**
+ * The king rule, at resolve time: the Heart re-reads the board after your
+ * move. Checked, it abandons its plan and flees to the best uncovered square;
+ * and it never steps onto a square that became covered after it committed —
+ * it balks instead. (Checked with no way out never reaches here: that's
+ * cornered, and settleCornered has already ended the fight.)
+ */
+function resolveHeart(s: FightState, h: Piece, aim: Vec | null) {
+  const cover = friendCover(s);
+  if (cover.has(h.y * 64 + h.x)) {
+    const outs = movesFor(s, h).filter((m) => !cover.has(m.y * 64 + m.x));
+    const to = pickBest(s, outs).to;
+    if (!to) return; // walled in mid-resolve; settleCornered will judge it
+    s.events.push({ type: 'flee', at: { x: h.x, y: h.y }, kind: 'heart' });
+    land(s, h, to);
+    return;
+  }
+  if (!aim) return; // dug in on purpose
+  const to = landingFor(s, h, aim);
+  if (to && !cover.has(to.y * 64 + to.x)) {
+    land(s, h, to);
+  } else {
+    s.events.push({ type: 'blocked', at: { x: h.x, y: h.y }, kind: 'heart' });
+  }
 }
 
 /**
@@ -286,13 +319,23 @@ function assignTelegraphs(s: FightState) {
 
 /**
  * Prefer capturing the keeper, then any friend, else drift toward the keeper.
- * The Heart also dreads covered squares and would rather stand still than
- * step into danger — that's what makes penning it in a real hunt.
+ * The Heart never plans onto a covered square and would rather stand still
+ * than step into danger — that's what makes penning it in a real hunt.
  */
 function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score: number } {
-  const opts = movesFor(s, e);
-  if (opts.length === 0) return { id: e.id, to: null, score: -Infinity };
-  const dread = e.kind === 'heart' ? friendCover(s) : null;
+  let opts = movesFor(s, e);
+  if (e.kind === 'heart') {
+    const cover = friendCover(s);
+    opts = opts.filter((m) => !cover.has(m.y * 64 + m.x));
+    if (opts.length === 0 && !cover.has(e.y * 64 + e.x)) {
+      return { id: e.id, to: null, score: -Infinity }; // safer right here — don't move
+    }
+  }
+  return { id: e.id, ...pickBest(s, opts) };
+}
+
+/** The meanest of the given options: keeper capture > any capture > drift toward the keeper. */
+function pickBest(s: FightState, opts: Vec[]): { to: Vec | null; score: number } {
   const k = keeper(s);
   let best: Vec | null = null;
   let bestScore = -Infinity;
@@ -301,15 +344,11 @@ function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score:
     let score = 0;
     if (occ) score = occ.kind === 'keeper' ? 1000 : 100;
     else if (k) score = -(Math.abs(o.x - k.x) + Math.abs(o.y - k.y));
-    if (dread?.has(o.y * 64 + o.x)) score -= 500;
     score += s.rng() * 0.5; // shuffle ties so drift isn't robotic
     if (score > bestScore) {
       bestScore = score;
       best = o;
     }
   }
-  if (dread && best && dread.has(best.y * 64 + best.x) && !dread.has(e.y * 64 + e.x)) {
-    return { id: e.id, to: null, score: -Infinity }; // safer right here — don't move
-  }
-  return { id: e.id, to: best, score: bestScore };
+  return { to: best, score: bestScore };
 }
