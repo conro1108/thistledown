@@ -155,30 +155,21 @@ interface SceneOption {
   icon?: string;
   label: string;
   detail: string;
-  /** confirm-button verb once selected */
-  confirm?: string;
   fn: () => void;
 }
 
 /**
- * The between-fights picker: little cards you tap to choose. Each critter card
- * carries a faint arrow-hint of how it moves, drawn right on the card — a
- * quiet reminder, not the whole pocket-meadow diorama the old preview box was.
- * A short blurb line updates on select; tap a card again to commit.
+ * The between-fights picker: little cards, one tap commits. Each critter card
+ * carries the sprite, its name, a one-line blurb, and a faint arrow-hint of how
+ * it moves drawn right on the card — plenty to choose on, no preview box, no
+ * confirm step.
  */
 function showChoiceScene(title: string, body: string, options: SceneOption[]) {
   overlayEl.innerHTML = `<div class="card"><h2></h2><p class="scene-body"></p>
-    <div class="opts"></div>
-    <p class="detail"></p>
-    <div class="btns"><button class="confirm" disabled>Choose…</button></div></div>`;
+    <div class="opts"></div></div>`;
   overlayEl.querySelector('h2')!.textContent = title;
   overlayEl.querySelector('.scene-body')!.textContent = body;
   const optsEl = overlayEl.querySelector('.opts')!;
-  const detailEl = overlayEl.querySelector<HTMLParagraphElement>('.detail')!;
-  const confirmBtn = overlayEl.querySelector<HTMLButtonElement>('.confirm')!;
-  detailEl.textContent = 'Tap to hear more, tap again to choose.';
-  let chosen: SceneOption | null = null;
-  const cards: HTMLButtonElement[] = [];
   for (const o of options) {
     const b = document.createElement('button');
     b.className = 'opt';
@@ -207,29 +198,16 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
       drawMoveHint(hint.getContext('2d')!, o.kind);
       b.append(hint);
     }
+    const blurb = document.createElement('span');
+    blurb.className = 'blurb';
+    blurb.textContent = o.detail;
+    b.append(blurb);
     b.onclick = () => {
-      // tapping the already-studied card commits — half the taps, still no
-      // blind one-tap commits (the detail is on screen when you re-tap)
-      if (chosen === o) {
-        overlayEl.classList.add('hidden');
-        o.fn();
-        return;
-      }
-      chosen = o;
-      for (const c of cards) c.classList.remove('selected');
-      b.classList.add('selected');
-      detailEl.textContent = o.detail;
-      confirmBtn.disabled = false;
-      confirmBtn.textContent = o.confirm ?? 'Choose';
+      overlayEl.classList.add('hidden');
+      o.fn();
     };
-    cards.push(b);
     optsEl.append(b);
   }
-  confirmBtn.onclick = () => {
-    if (!chosen) return;
-    overlayEl.classList.add('hidden');
-    chosen.fn();
-  };
   overlayEl.classList.remove('hidden');
 }
 
@@ -458,7 +436,6 @@ function endOfFightUi() {
       kind,
       label: KIND_INFO[kind].title,
       detail: KIND_INFO[kind].blurb,
-      confirm: `Befriend the ${KIND_INFO[kind].title}`,
       fn: () => {
         doEntry({ t: 'recruit', kind });
         stageUi();
@@ -468,7 +445,6 @@ function endOfFightUi() {
       icon: '🍃',
       label: 'Travel light',
       detail: 'No new friends this time — a smaller band moves quicker through the grass.',
-      confirm: 'Travel light',
       fn: () => {
         doEntry({ t: 'skip' });
         stageUi();
@@ -514,7 +490,6 @@ function trinketFound() {
       icon: TRINKETS[id].icon,
       label: TRINKETS[id].title,
       detail: TRINKETS[id].blurb,
-      confirm: `Take the ${TRINKETS[id].title}`,
       fn: () => {
         doEntry({ t: 'trinket', id });
         stageUi();
@@ -533,7 +508,6 @@ function campStop() {
       icon: '🍲',
       label: 'Warm mash',
       detail: `${listKinds(shaken)} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
-      confirm: 'Serve the mash',
       fn: () => {
         doEntry({ t: 'heal' });
         stageUi();
@@ -545,7 +519,6 @@ function campStop() {
       icon: '🍯',
       label: 'Honeycake',
       detail: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
-      confirm: 'Cut the honeycake',
       fn: honeycakeChoice,
     });
   }
@@ -554,7 +527,6 @@ function campStop() {
       icon: TRINKETS[id].icon,
       label: TRINKETS[id].title,
       detail: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
-      confirm: `Take the ${TRINKETS[id].title}`,
       fn: () => {
         doEntry({ t: 'trinket', id });
         stageUi();
@@ -565,7 +537,6 @@ function campStop() {
     icon: '🔥',
     label: 'Rest quietly',
     detail: 'Just the crackle of the fire.',
-    confirm: 'Rest',
     fn: () => {
       doEntry({ t: 'rest' });
       stageUi();
@@ -590,7 +561,6 @@ function honeycakeChoice() {
         kind: c.kind,
         label: c.name,
         detail: `${c.name} the ${KIND_INFO[c.kind].title} gains a plain one-step move in any direction — for good.`,
-        confirm: `Honeycake for ${c.name}`,
         fn: () => {
           doEntry({ t: 'snack', idx: i });
           stageUi();
@@ -624,7 +594,6 @@ function promotionChoice() {
       kind,
       label: KIND_INFO[kind].title,
       detail: KIND_INFO[kind].blurb,
-      confirm: `Become a ${KIND_INFO[kind].title}`,
       fn: () => {
         doEntry({ t: 'promote', kind });
         drainEvents();
