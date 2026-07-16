@@ -13,9 +13,9 @@ const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing s
 const PAUSE_MS = 340; // beat after your move, before the bramble acts
 const TWEEN_MS = 190; // how long their slide/leap takes to draw
 const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
-// v3: the ladder went from 7 fixed fights to 3 regions of 4 rolled off the
-// seed — older decision logs no longer replay faithfully, so let them go
-const SAVE_KEY = 'overgrown.save.v3';
+// v4: four regions of four, retuned dials/spread, bramble promotion, true-mate
+// cornering — older decision logs no longer replay faithfully, so let them go
+const SAVE_KEY = 'overgrown.save.v4';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `

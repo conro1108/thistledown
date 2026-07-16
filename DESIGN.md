@@ -28,7 +28,7 @@ sit-down-for-40-minutes game.
 3. **Cozy, not grim.** Nothing dies. Enemies poof into flowers. Your pieces get
    "tuckered out" and scamper back to camp when captured. Losing a run is going home
    for tea.
-4. **Short, dense fights.** 5–15 turns per fight, 8–12 fights per run, a run is
+4. **Short, dense fights.** 5–15 turns per fight, ~16 fights per run, a run is
    30–60 minutes. Every turn should have a real decision.
 
 ## The stealth chess curriculum
@@ -128,8 +128,11 @@ critters-vs-critters:
 
 Slay-the-Spire-shaped, kept simple:
 
-- **3 regions** (Meadow → Thicket → the Deep Bramble), each a short branching node map:
-  ~4 fights, 1 event, 1 camp, 1 boss. Full run ≈ 8–12 fights, 30–60 min.
+- **4 regions** (Meadow → Thicket → Tanglewood → the Deep Bramble), each a short
+  branching node map: ~4 fights, 1 event, 1 camp, 1 boss. Full run ≈ 16 fights,
+  45–75 min. (Started at 3 regions/12 fights; playtest verdict was "it stopped
+  right as it was starting to get fun" — the extra region is where fickle,
+  shrouded, and 3-acts get room to breathe, plus a second cornering boss.)
 - **Camp** between fights: heal shaken friends, feed snacks (small permanent buffs to
   one critter), swap trinkets, tiny dialogue vignettes. Camp is the cozy valve — the
   breather that makes the tactics feel earned.
@@ -229,7 +232,7 @@ framework tax:
   isn't fun here, no amount of roguelike structure will save it.*
 - **M1 — The run.** Node map, 1 region, recruiting, camp, snacks, 5–6 trinkets, first
   boss with the cornering rule, run win/loss, mid-run save.
-- **M2 — The game.** All 6 piece types on both sides, 3 regions, spice enemies,
+- **M2 — The game.** All 6 piece types on both sides, 4 regions, spice enemies,
   promotion, movement upgrades, ~30 trinkets, events, real pixel art and sound.
 - **M3 — The polish.** Meta unlocks, bestiary, ascension, juice pass, PWA, daily seed.
   Wife test: hand it over with zero explanation and watch.

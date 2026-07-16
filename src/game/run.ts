@@ -98,9 +98,9 @@ export interface FightSpec {
   spread?: SpreadConfig;
 }
 
-// ---------- the ladder: 3 regions × 4 clearings ----------
+// ---------- the ladder: 4 regions × 4 clearings ----------
 
-export const REGION_NAMES = ['The Meadow', 'The Thicket', 'The Deep Bramble'];
+export const REGION_NAMES = ['The Meadow', 'The Thicket', 'The Tanglewood', 'The Deep Bramble'];
 export const FIGHTS_PER_REGION = 4;
 
 export function regionOf(fightIndex: number): number {
@@ -133,16 +133,17 @@ const COST: Partial<Record<Kind, number>> = {
 const CORNER_HEART = 'Corner it — leave it nowhere safe to step.';
 
 const TEMPLATES: FightTemplate[] = [
-  // -------- The Meadow: full telegraphs, a naive bramble, one lesson each --------
+  // -------- The Meadow: full telegraphs, a naive-ish bramble, one lesson each --------
   {
     name: 'Meadow Edge',
     intro: 'Thistles in the clover. An arrow marks the one about to move — and exactly where it’s going.',
     w: 6,
     h: 6,
     acts: 1,
-    spread: { after: 14, every: 3, cap: 5 },
+    spread: { after: 12, every: 3, cap: 5 },
     core: [{ kind: 'thistle' }, { kind: 'thistle' }, { kind: 'thistle' }],
-    budget: 0,
+    budget: 1,
+    pool: ['thistle'],
   },
   {
     name: 'The Warren',
@@ -150,10 +151,11 @@ const TEMPLATES: FightTemplate[] = [
     w: 6,
     h: 6,
     acts: 1,
-    spread: { after: 14, every: 3, cap: 5 },
+    spread: { after: 12, every: 3, cap: 5 },
     core: [{ kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
-    budget: 1,
+    budget: 2,
     pool: ['thistle'],
+    dials: { foresight: 0.1, caution: 0.1 },
   },
   {
     name: 'Hedgerow',
@@ -161,11 +163,11 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 12, every: 3, cap: 6 },
+    spread: { after: 10, every: 3, cap: 6 },
     core: [{ kind: 'thistle' }, { kind: 'tumbleweed' }, { kind: 'tumbleweed' }],
-    budget: 2,
+    budget: 3,
     pool: ['thistle'],
-    dials: { foresight: 0.2, caution: 0.2 },
+    dials: { foresight: 0.3, caution: 0.3 },
   },
   {
     name: 'The Heart Sapling',
@@ -175,10 +177,11 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 6 },
+    spread: { after: 9, every: 3, cap: 6 },
     core: [{ kind: 'heart' }, { kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
-    budget: 0,
-    dials: { foresight: 0.3, caution: 0.3 },
+    budget: 1,
+    pool: ['thistle'],
+    dials: { foresight: 0.4, caution: 0.4 },
   },
   // -------- The Thicket: sliders everywhere, and the first fickle arrows --------
   {
@@ -188,11 +191,11 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 12, every: 3, cap: 6 },
+    spread: { after: 10, every: 3, cap: 6 },
     core: [{ kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
-    dials: { foresight: 0.4, caution: 0.4 },
+    dials: { foresight: 0.5, caution: 0.4 },
   },
   {
     name: 'Fickleweed Field',
@@ -201,10 +204,11 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 12, every: 3, cap: 6 },
+    spread: { after: 10, every: 3, cap: 6 },
     core: [{ kind: 'tumbleweed', fickle: true }, { kind: 'creeper', fickle: true }, { kind: 'thistle' }],
-    budget: 2,
-    pool: ['thistle'],
+    budget: 3,
+    pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.5,
     dials: { foresight: 0.5, caution: 0.5 },
   },
   {
@@ -213,11 +217,11 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 12, every: 3, cap: 7 },
+    spread: { after: 10, every: 3, cap: 7 },
     core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
-    budget: 3,
+    budget: 4,
     pool: ['thistle', 'tumbleweed'],
-    fickleChance: 0.3,
+    fickleChance: 0.4,
     dials: { foresight: 0.6, caution: 0.5 },
   },
   {
@@ -226,30 +230,45 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 12, every: 3, cap: 7 },
+    spread: { after: 10, every: 3, cap: 7 },
     core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
-    budget: 3,
+    budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
-    fickleChance: 0.3,
+    fickleChance: 0.4,
     dials: { foresight: 0.7, caution: 0.6 },
   },
-  // -------- The Deep Bramble: shrouded intent — read reaches, not arrows --------
+  // -------- The Tanglewood: shrouded intent — read reaches, not arrows --------
   {
     name: 'Duskmoss',
     intro:
-      'The Deep Bramble, where the gloom pools. Shrouded things live here — no arrows, no promises. Tap any creature to light up everywhere it could strike.',
+      'The Tanglewood, where the gloom pools. Shrouded things live here — no arrows, no promises. Tap any creature to light up everywhere it could strike.',
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 12, every: 3, cap: 7 },
+    spread: { after: 10, every: 3, cap: 7 },
     core: [
       { kind: 'creeper', veiled: true },
       { kind: 'tumbleweed', veiled: true },
       { kind: 'thistle' },
       { kind: 'thistle' },
     ],
-    budget: 2,
-    pool: ['thistle'],
+    budget: 3,
+    pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.2,
+    dials: { foresight: 0.7, caution: 0.6 },
+  },
+  {
+    name: 'The Old Wall',
+    intro:
+      'Root golems built this wall, and shrouded ones still patrol it. The straight lanes are never safe — check them square by square.',
+    w: 8,
+    h: 8,
+    acts: 2,
+    spread: { after: 10, every: 2, cap: 8 },
+    core: [{ kind: 'golem', veiled: true }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 4,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    veiledChance: 0.3,
     dials: { foresight: 0.8, caution: 0.7 },
   },
   {
@@ -258,37 +277,23 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 11, every: 3, cap: 8 },
+    spread: { after: 9, every: 3, cap: 8 },
     core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'tumbleweed' }],
-    budget: 4,
+    budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
-    fickleChance: 0.25,
-    veiledChance: 0.25,
-    dials: { foresight: 0.9, caution: 0.8 },
-  },
-  {
-    name: 'The Old Wall',
-    intro:
-      'Root golems built this wall, and shrouded ones still patrol it. The straight lanes are never safe — check them square by square.',
-    w: 8,
-    h: 8,
-    acts: 3,
-    spread: { after: 11, every: 2, cap: 8 },
-    core: [{ kind: 'golem', veiled: true }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
-    budget: 4,
-    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.3,
     veiledChance: 0.3,
     dials: { foresight: 0.9, caution: 0.8 },
   },
   {
-    name: 'The Bramble Heart',
+    name: 'The Thorned Heart',
     intro:
-      'The heart of it all. It cannot be caught — no paw lands on it. Hem it in, friends covering every path, until it has nowhere safe to step.',
+      'An old heart, grown crooked and mean, with guards who answer when you press it. Cover its guards as well as its ground — a net with a loose knot is no net.',
     objective: CORNER_HEART,
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 10, every: 2, cap: 8 },
+    spread: { after: 9, every: 2, cap: 8 },
     core: [
       { kind: 'heart' },
       { kind: 'golem' },
@@ -298,7 +303,69 @@ const TEMPLATES: FightTemplate[] = [
     ],
     budget: 2,
     pool: ['thistle'],
+    dials: { foresight: 0.9, caution: 0.8 },
+  },
+  // -------- The Deep Bramble: everything at once, no mercy left --------
+  {
+    name: 'Gloaming Field',
+    intro: 'The Deep Bramble. A gloom hunts here unseen — no arrow will warn you. Check every lane before you stand in it.',
+    w: 8,
+    h: 8,
+    acts: 2,
+    spread: { after: 9, every: 2, cap: 8 },
+    core: [{ kind: 'gloom', veiled: true }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
+    budget: 4,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    veiledChance: 0.4,
+    dials: { foresight: 0.9, caution: 0.8 },
+  },
+  {
+    name: 'The Choir of Roots',
+    intro: 'The old roots sing to each other down the lanes. Three move every turn, and some of them are lying.',
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 9, every: 2, cap: 8 },
+    core: [{ kind: 'golem' }, { kind: 'golem', veiled: true }, { kind: 'creeper', fickle: true }],
+    budget: 5,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.3,
+    veiledChance: 0.3,
     dials: { foresight: 1, caution: 0.9 },
+  },
+  {
+    name: 'Thornfall',
+    intro: 'The last slope before the heart of it all. Everything the bramble ever learned is on this hill.',
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 8, every: 2, cap: 9 },
+    core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'tumbleweed', veiled: true }, { kind: 'thistle' }],
+    budget: 5,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.3,
+    veiledChance: 0.3,
+    dials: { foresight: 1, caution: 0.9 },
+  },
+  {
+    name: 'The Bramble Heart',
+    intro:
+      'The heart of it all. It cannot be caught — no paw lands on it — and its guards will throw themselves into your net to save it. Cover everything. Leave it nothing.',
+    objective: CORNER_HEART,
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 8, every: 2, cap: 9 },
+    core: [
+      { kind: 'heart' },
+      { kind: 'golem' },
+      { kind: 'creeper', veiled: true },
+      { kind: 'thistle', fickle: true },
+      { kind: 'thistle' },
+    ],
+    budget: 3,
+    pool: ['thistle', 'tumbleweed'],
+    dials: { foresight: 1, caution: 1 },
   },
 ];
 
@@ -378,7 +445,9 @@ export function offerRecruits(run: RunState): Kind[] {
         ? ['sprout', 'hopper', 'slink', 'rumble']
         : r === 1
           ? ['hopper', 'slink', 'rumble']
-          : ['slink', 'rumble', 'duchess'];
+          : r === 2
+            ? ['slink', 'rumble']
+            : ['slink', 'rumble', 'duchess'];
   const a = pool[Math.floor(run.rng() * pool.length)];
   let b = a;
   while (b === a) b = pool[Math.floor(run.rng() * pool.length)];
@@ -427,11 +496,9 @@ export function takeTrinket(run: RunState, id: TrinketId) {
 
 // ---------- camp ----------
 
-/** Camps sit before each region's boss (0-based fightIndex). */
-const CAMPS = new Set([3, 7, 11]);
-
+/** Camps sit before each region's boss — the last clearing of every region. */
 export function campDue(run: RunState): boolean {
-  return run.status === 'playing' && CAMPS.has(run.fightIndex);
+  return run.status === 'playing' && run.fightIndex % FIGHTS_PER_REGION === FIGHTS_PER_REGION - 1;
 }
 
 /** Warm mash: every shaken friend recovers right now. */

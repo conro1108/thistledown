@@ -86,7 +86,11 @@ describe('run', () => {
     expect(campDue(run)).toBe(true);
     run.fightIndex = 7;
     expect(campDue(run)).toBe(true);
+    run.fightIndex = 15;
+    expect(campDue(run)).toBe(true);
     run.fightIndex = 4;
+    expect(campDue(run)).toBe(false);
+    run.fightIndex = 12;
     expect(campDue(run)).toBe(false);
     run.fightIndex = 3;
     run.companions[0].shaken = true;
@@ -127,7 +131,7 @@ describe('run', () => {
 });
 
 describe('the ladder (generateFights)', () => {
-  it('is three regions of four, deterministic per seed', () => {
+  it('is four regions of four, deterministic per seed', () => {
     expect(generateFights(99)).toEqual(generateFights(99));
     const fights = generateFights(99);
     expect(fights).toHaveLength(REGION_NAMES.length * FIGHTS_PER_REGION);
@@ -135,6 +139,8 @@ describe('the ladder (generateFights)', () => {
     expect(regionOf(3)).toBe(0);
     expect(regionOf(4)).toBe(1);
     expect(regionOf(11)).toBe(2);
+    expect(regionOf(12)).toBe(3);
+    expect(regionOf(15)).toBe(3);
   });
 
   it('different seeds grow different meadows (somewhere in the ladder)', () => {
@@ -143,18 +149,19 @@ describe('the ladder (generateFights)', () => {
     expect(a).not.toEqual(b);
   });
 
-  it('bosses cap regions 1 and 3; the Gloom holds region 2', () => {
+  it('hearts cap regions 1, 3 and 4; the Gloom holds region 2', () => {
     const fights = generateFights(7);
     expect(fights[3].enemies.some((e) => e.kind === 'heart')).toBe(true);
     expect(fights[7].enemies.some((e) => e.kind === 'gloom')).toBe(true);
     expect(fights[11].enemies.some((e) => e.kind === 'heart')).toBe(true);
+    expect(fights[15].enemies.some((e) => e.kind === 'heart')).toBe(true);
     // hearts nowhere else
     fights.forEach((f, i) => {
-      if (i !== 3 && i !== 11) expect(f.enemies.some((e) => e.kind === 'heart')).toBe(false);
+      if (i !== 3 && i !== 11 && i !== 15) expect(f.enemies.some((e) => e.kind === 'heart')).toBe(false);
     });
   });
 
-  it('the training wheels come off on schedule: no fickle before the Thicket, no shrouds before the Deep Bramble', () => {
+  it('the training wheels come off on schedule: no fickle before the Thicket, no shrouds before the Tanglewood', () => {
     for (let seed = 0; seed < 60; seed++) {
       const fights = generateFights(seed);
       fights.forEach((f, i) => {

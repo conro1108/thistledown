@@ -78,8 +78,10 @@ priority. Don't overspec ahead of what's built.
       the better at resolve) and shrouded/veiled ones (committed but unshown —
       a "?", with tap-to-inspect reach as the read). The difficulty spine of
       regions 2–3
-- [x] **3 regions × 4 clearings** (Meadow → Thicket → Deep Bramble), boss per
-      region (Heart Sapling / the Gloom / the Bramble Heart). Each clearing is
+- [x] **4 regions × 4 clearings** (Meadow → Thicket → Tanglewood → Deep
+      Bramble; grown from 3×4 after playtest — too short), boss per region
+      (Heart Sapling / the Gloom / the Thorned Heart / the Bramble Heart —
+      three cornering fights, so the mating-net skill gets real reps). Each clearing is
       a template: authored `core` enemies (the lesson) + a points `budget`
       (piece values as cost) rolled per run from a region pool, on a dedicated
       RNG stream so play choices never shift the ladder. Camps before bosses;
@@ -89,7 +91,7 @@ priority. Don't overspec ahead of what's built.
       explicit confirm
 - [ ] Sound: WebAudio chiptune, captures pop into flowers
 - [ ] Real art pass (current sprites are placeholders-with-charm)
-- [ ] Balance pass on the 12-fight ladder (dial curve, budgets, spread
+- [ ] Balance pass on the 16-fight ladder (dial curve, budgets, spread
       timings, dual-boss difficulty are all first guesses — playtest and tune)
 
 ## P3 — Later
