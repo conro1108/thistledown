@@ -161,8 +161,8 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
   const patternEl = overlayEl.querySelector<HTMLCanvasElement>('.pattern')!;
   const detailEl = overlayEl.querySelector<HTMLParagraphElement>('.detail')!;
   const confirmBtn = overlayEl.querySelector<HTMLButtonElement>('.confirm')!;
-  detailEl.textContent = 'Tap someone to hear more.';
-  patternEl.style.display = 'none';
+  detailEl.textContent = 'Tap someone to hear more. Tap them again to choose.';
+  patternEl.style.visibility = 'hidden';
   let chosen: SceneOption | null = null;
   const cards: HTMLButtonElement[] = [];
   for (const o of options) {
@@ -186,15 +186,22 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
     nm.textContent = o.label;
     b.append(nm);
     b.onclick = () => {
+      // tapping the already-studied card commits — half the taps, still no
+      // blind one-tap commits (the detail is on screen when you re-tap)
+      if (chosen === o) {
+        overlayEl.classList.add('hidden');
+        o.fn();
+        return;
+      }
       chosen = o;
       for (const c of cards) c.classList.remove('selected');
       b.classList.add('selected');
       detailEl.textContent = o.detail;
       if (o.kind) {
-        patternEl.style.display = '';
+        patternEl.style.visibility = '';
         drawPattern(patternEl, o.kind);
       } else {
-        patternEl.style.display = 'none';
+        patternEl.style.visibility = 'hidden';
       }
       confirmBtn.disabled = false;
       confirmBtn.textContent = o.confirm ?? 'Choose';
@@ -607,9 +614,14 @@ function refreshHud() {
   statusEl.className = fight.status !== 'playing' ? fight.status : phase;
   trinketsEl.innerHTML = '';
   for (const id of run.trinkets) {
-    const t = document.createElement('span');
+    // a real button: title= tooltips don't exist on a phone
+    const t = document.createElement('button');
+    t.className = 'trinket';
     t.textContent = TRINKETS[id].icon;
-    t.title = `${TRINKETS[id].title} — ${TRINKETS[id].blurb}`;
+    t.onclick = () =>
+      showOverlay(`${TRINKETS[id].icon} ${TRINKETS[id].title}`, TRINKETS[id].blurb, [
+        { label: 'Onward', fn: () => {} },
+      ]);
     trinketsEl.append(t);
   }
   renderRoster();

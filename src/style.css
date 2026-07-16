@@ -54,9 +54,20 @@ button, input, textarea, select { font-family: inherit; }
 
 #trinkets {
   display: flex;
-  gap: 4px;
-  font-size: 14px;
+  gap: 6px;
 }
+
+/* trinket badges: real buttons — tap one to hear what it does */
+.trinket {
+  font-size: 17px;
+  line-height: 1.25;
+  padding: 2px 8px;
+  border: 1.5px solid var(--edge);
+  border-radius: 8px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.trinket:active { border-color: var(--lantern); }
 
 /* ---------- board ---------- */
 
@@ -267,7 +278,10 @@ canvas {
   align-items: center;
   justify-content: center;
   margin-top: 12px;
-  min-height: 104px;
+  /* fixed, not min-: the confirm button below must never move when a
+     selection swaps the pattern preview in or out */
+  height: 184px;
+  overflow-y: auto;
   background: var(--panel-2);
   border: 1.5px solid var(--edge);
   border-radius: 10px;
