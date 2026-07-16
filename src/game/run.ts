@@ -1,6 +1,7 @@
+import { threatsFor } from './board';
 import type { FightConfig, Spawn } from './fight';
 import { mulberry32 } from './rng';
-import type { Kind, Rng } from './types';
+import type { FightState, Kind, Piece, Rng } from './types';
 
 export interface Companion {
   kind: Kind;
@@ -80,11 +81,8 @@ export interface FightSpec {
   w: number;
   h: number;
   acts: number;
-  enemies: Spawn[];
-}
-
-function e(kind: Kind, x: number, y: number): Spawn {
-  return { kind, x, y };
+  /** which kinds appear — buildFightConfig rolls their actual squares fresh each run */
+  enemies: Kind[];
 }
 
 export const FIGHTS: FightSpec[] = [
@@ -94,7 +92,7 @@ export const FIGHTS: FightSpec[] = [
     w: 6,
     h: 6,
     acts: 1,
-    enemies: [e('thistle', 1, 1), e('thistle', 4, 1), e('thistle', 2, 0)],
+    enemies: ['thistle', 'thistle', 'thistle'],
   },
   {
     name: 'The Warren',
@@ -102,7 +100,7 @@ export const FIGHTS: FightSpec[] = [
     w: 6,
     h: 6,
     acts: 1,
-    enemies: [e('thistle', 1, 1), e('thistle', 4, 1), e('tumbleweed', 2, 0)],
+    enemies: ['thistle', 'thistle', 'tumbleweed'],
   },
   {
     name: 'Hedgerow',
@@ -110,7 +108,7 @@ export const FIGHTS: FightSpec[] = [
     w: 7,
     h: 7,
     acts: 2,
-    enemies: [e('thistle', 1, 1), e('thistle', 5, 1), e('tumbleweed', 3, 0), e('tumbleweed', 6, 0)],
+    enemies: ['thistle', 'thistle', 'tumbleweed', 'tumbleweed'],
   },
   {
     name: 'Bramble Gate',
@@ -118,7 +116,7 @@ export const FIGHTS: FightSpec[] = [
     w: 7,
     h: 7,
     acts: 2,
-    enemies: [e('creeper', 3, 0), e('thistle', 1, 1), e('thistle', 5, 1), e('tumbleweed', 6, 1)],
+    enemies: ['creeper', 'thistle', 'thistle', 'tumbleweed'],
   },
   {
     name: 'Root Cellar',
@@ -126,13 +124,7 @@ export const FIGHTS: FightSpec[] = [
     w: 8,
     h: 8,
     acts: 2,
-    enemies: [
-      e('golem', 3, 0),
-      e('creeper', 1, 0),
-      e('creeper', 6, 0),
-      e('thistle', 2, 1),
-      e('thistle', 5, 1),
-    ],
+    enemies: ['golem', 'creeper', 'creeper', 'thistle', 'thistle'],
   },
   {
     name: 'Gloom Hollow',
@@ -140,13 +132,7 @@ export const FIGHTS: FightSpec[] = [
     w: 8,
     h: 8,
     acts: 3,
-    enemies: [
-      e('gloom', 4, 0),
-      e('golem', 1, 0),
-      e('creeper', 6, 0),
-      e('thistle', 2, 1),
-      e('thistle', 5, 1),
-    ],
+    enemies: ['gloom', 'golem', 'creeper', 'thistle', 'thistle'],
   },
   {
     name: 'The Bramble Heart',
@@ -156,13 +142,7 @@ export const FIGHTS: FightSpec[] = [
     w: 8,
     h: 8,
     acts: 2,
-    enemies: [
-      e('heart', 4, 0),
-      e('golem', 1, 0),
-      e('creeper', 6, 0),
-      e('thistle', 2, 1),
-      e('thistle', 5, 1),
-    ],
+    enemies: ['heart', 'golem', 'creeper', 'thistle', 'thistle'],
   },
 ];
 
@@ -286,6 +266,47 @@ export interface BuiltFight {
   lineup: number[];
 }
 
+/** Every square the (already-placed) friends threaten, before the enemy side exists yet. */
+function friendCoverAtSpawn(w: number, h: number, friends: Spawn[]): Set<string> {
+  const pieces: Piece[] = friends.map((sp, i) => ({ id: i, side: 'friend', ...sp }));
+  const view = { w, h, pieces } as FightState;
+  const covered = new Set<string>();
+  for (const p of pieces) for (const t of threatsFor(view, p)) covered.add(`${t.x},${t.y}`);
+  return covered;
+}
+
+/**
+ * Roll each enemy a fresh square in the top portion of the board — distinct
+ * squares, real randomness off the run's seeded RNG each time a clearing is
+ * entered. Same kinds every time (that's the mechanic the clearing teaches),
+ * but the shape of the threat varies run to run instead of greeting the
+ * player with an identical picture every time. The Bramble Heart never
+ * spawns already in check — a long-range friend (rumble/duchess/slink)
+ * happening to share its file/rank/diagonal shouldn't hand the boss fight
+ * away, or start it, before the player has made a single move.
+ */
+function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
+  const zoneRows = Math.max(2, Math.floor(spec.h / 2) - 1);
+  const heartCover = spec.enemies.includes('heart') ? friendCoverAtSpawn(spec.w, spec.h, friends) : null;
+  const taken = new Set<string>();
+  return spec.enemies.map((kind) => {
+    let x = 0;
+    let y = 0;
+    let key = '';
+    let bad: boolean;
+    let tries = 0;
+    do {
+      x = Math.floor(rng() * spec.w);
+      y = Math.floor(rng() * zoneRows);
+      key = `${x},${y}`;
+      bad = taken.has(key) || (kind === 'heart' && heartCover!.has(key));
+      tries++;
+    } while (bad && tries < 200); // give up steering clear rather than hang — a clash of constraints beats an infinite loop
+    taken.add(key);
+    return { kind, x, y };
+  });
+}
+
 /**
  * Keeper spawns bottom-center, active companions fan out on the row above.
  * Shaken companions sit this one out.
@@ -311,7 +332,7 @@ export function buildFightConfig(run: RunState): BuiltFight {
       w: spec.w,
       h: spec.h,
       friends,
-      enemies: spec.enemies,
+      enemies: placeEnemies(spec, run.rng, friends),
       actsPerTurn: spec.acts,
       cloak: run.trinkets.includes('cloak'),
       secondBreakfast: run.trinkets.includes('breakfast'),

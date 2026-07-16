@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { threatsFor } from './board';
 import {
   afterFightWon,
   buildFightConfig,
@@ -12,6 +13,7 @@ import {
   recruit,
   takeTrinket,
 } from './run';
+import type { FightState, Piece } from './types';
 
 describe('run', () => {
   it('every fight lineup fits the board with no overlaps', () => {
@@ -30,6 +32,24 @@ describe('run', () => {
         seen.add(key);
       }
       expect(cfg.friends[0].kind).toBe('keeper');
+    }
+  });
+
+  it('the Bramble Heart never spawns already in check — a long-range friend sharing its lane at kickoff would give the fight away for free', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const run = newRun(seed);
+      run.fightIndex = FIGHTS.length - 1; // the boss clearing
+      // stack long-range friends into the lineup so a shared file/rank/diagonal
+      // with the Heart's roll is plausible, not a coincidence we'd rarely hit
+      run.companions.push({ kind: 'rumble', name: 'a', shaken: false });
+      run.companions.push({ kind: 'duchess', name: 'b', shaken: false });
+      const { cfg } = buildFightConfig(run);
+      const heart = cfg.enemies.find((e) => e.kind === 'heart')!;
+      const pieces: Piece[] = cfg.friends.map((sp, i) => ({ id: i, side: 'friend', ...sp }));
+      const view = { w: cfg.w, h: cfg.h, pieces } as FightState;
+      const covered = new Set<string>();
+      for (const p of pieces) for (const t of threatsFor(view, p)) covered.add(`${t.x},${t.y}`);
+      expect(covered.has(`${heart.x},${heart.y}`)).toBe(false);
     }
   });
 

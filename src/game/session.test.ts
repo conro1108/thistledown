@@ -91,6 +91,13 @@ describe('session', () => {
   it('retrying a lost clearing rewinds to that fight, not the start of the run', () => {
     // The idle bot never wins a fight; a capture-seeking one clears them, so we
     // can get genuinely several clearings deep before exercising the retry.
+    // Enemy squares are randomized per run now, so "seek" also has to close
+    // the distance when nothing is capturable yet — a fixed first-legal-move
+    // fallback only worked by luck of a particular hardcoded layout. Track
+    // each piece's previous square so a leaper (whose Manhattan distance to a
+    // target doesn't shrink monotonically move-to-move) can't just ping-pong
+    // between two equally-"close" squares forever.
+    const lastPos = new Map<number, { x: number; y: number }>();
     const grab = (s: Session): boolean => {
       const f = s.fight!;
       if (s.resolveDue) return apply(s, { t: 'resolve' });
@@ -101,7 +108,21 @@ describe('session', () => {
           if (occ?.side === 'bramble' && occ.kind !== 'heart') return apply(s, { t: 'move', id: p.id, to: m });
         }
       }
-      return botTurn(s); // no capture on offer — fall back to the idle driver
+      const foes = f.pieces.filter((p) => p.side === 'bramble');
+      let best: { id: number; to: { x: number; y: number }; dist: number } | null = null;
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        const prev = lastPos.get(p.id);
+        for (const m of movesFor(f, p)) {
+          if (prev && prev.x === m.x && prev.y === m.y) continue; // don't just undo the last hop
+          const dist = Math.min(...foes.map((e) => Math.abs(e.x - m.x) + Math.abs(e.y - m.y)));
+          if (!best || dist < best.dist) best = { id: p.id, to: m, dist };
+        }
+      }
+      if (!best) return botTurn(s); // hemmed in — wait
+      const mover = f.pieces.find((p) => p.id === best!.id)!;
+      lastPos.set(best.id, { x: mover.x, y: mover.y });
+      return apply(s, { t: 'move', id: best.id, to: best.to });
     };
     const drive = (s: Session) => (s.stage === 'fight' ? grab(s) : botTurn(s));
 
