@@ -23,8 +23,8 @@ export interface View {
   telegraphOverride?: Telegraph[];
 }
 
-const GRASS_A = '#8fbf6a';
-const GRASS_B = '#83b45f';
+const GRASS_A = '#9cc568';
+const GRASS_B = '#90ba5c';
 
 export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time: number) {
   // ground — plain grass for now; decorate later
@@ -97,10 +97,15 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     const pos = v.posOverrides?.get(p.id) ?? p;
     const px = Math.round(pos.x * TILE);
     const py = Math.round(pos.y * TILE);
-    // team plate under the feet: warm for friends, dusky for the bramble
-    ctx.fillStyle = p.side === 'friend' ? '#f2e2a0' : '#55437a';
-    ctx.fillRect(px + 2, py + 14, 12, 1);
-    ctx.fillRect(px + 3, py + 15, 10, 1);
+    // soft ground shadow under the feet, tinted by team: honey for friends,
+    // dusk for the bramble. Drawn *before* the sprite so the feet overlap its
+    // top row — grounded in the grass, not standing on a plate. The dotted
+    // tips melt the ends into the turf.
+    ctx.fillStyle = p.side === 'friend' ? '#e3d089' : '#5e4f85';
+    ctx.fillRect(px + 4, py + 13, 8, 1);
+    ctx.fillRect(px + 5, py + 14, 6, 1);
+    ctx.fillRect(px + 2, py + 13, 1, 1);
+    ctx.fillRect(px + 13, py + 13, 1, 1);
     const bob = (Math.floor(time / 450) + p.id) % 2 === 0 ? 0 : -1;
     drawSprite(ctx, p.kind, px + 2, py + 2 + bob);
   }

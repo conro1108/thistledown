@@ -4,6 +4,7 @@ import { enemies, type PromotionKind } from './game/fight';
 import { FIGHTS, KIND_INFO, TRINKETS, type RunState } from './game/run';
 import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
+import { drawBackdrop } from './render/backdrop';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
 
@@ -20,7 +21,7 @@ app.innerHTML = `
     <span id="fightname">Overgrown</span><span id="trinkets"></span>
   </header>
   <div id="board-area">
-    <div class="sun"></div>
+    <canvas id="backdrop" width="1" height="1"></canvas>
     <div id="board-wrap" class="idle">
       <canvas id="board" width="96" height="96"></canvas>
     </div>
@@ -35,6 +36,8 @@ app.innerHTML = `
 
 const canvas = document.querySelector<HTMLCanvasElement>('#board')!;
 const ctx = canvas.getContext('2d')!;
+const backdropEl = document.querySelector<HTMLCanvasElement>('#backdrop')!;
+const backdropCtx = backdropEl.getContext('2d')!;
 const boardAreaEl = document.querySelector<HTMLDivElement>('#board-area')!;
 const hudName = document.querySelector<HTMLSpanElement>('#fightname')!;
 const trinketsEl = document.querySelector<HTMLSpanElement>('#trinkets')!;
@@ -727,16 +730,43 @@ function drainEvents() {
 
 // ---------- sizing & render loop ----------
 
+/** Backdrop buffer state: same pixel size as the board's pixels, so the
+ * meadow and the clearing share one pixel grid. floorY is the horizon row. */
+let bgScale = 4;
+let bgFloorY = 40;
+
 function sizeCanvas() {
-  if (!fight) return;
   const area = boardAreaEl.getBoundingClientRect();
-  const availW = Math.max(60, area.width - 8);
-  const availH = Math.max(60, area.height - 8);
-  const scale = Math.max(1, Math.floor(Math.min(availW / canvas.width, availH / canvas.height)));
-  const w = `${canvas.width * scale}px`;
-  if (canvas.style.width === w) return; // no-op rescales feed the ResizeObserver loop
-  canvas.style.width = w;
-  canvas.style.height = `${canvas.height * scale}px`;
+  if (area.width < 1 || area.height < 1) return;
+  let scale = bgScale;
+  let boardTopCss: number | null = null;
+  if (fight) {
+    const availW = Math.max(60, area.width - 8);
+    const availH = Math.max(60, area.height - 8);
+    scale = Math.max(1, Math.floor(Math.min(availW / canvas.width, availH / canvas.height)));
+    const w = `${canvas.width * scale}px`;
+    if (canvas.style.width !== w) {
+      // guarded: no-op rescales feed the ResizeObserver loop
+      canvas.style.width = w;
+      canvas.style.height = `${canvas.height * scale}px`;
+    }
+    // the board is centered in the area's content box (padding 18px top, 4px bottom)
+    boardTopCss = 18 + Math.max(0, (area.height - 22 - canvas.height * scale) / 2);
+  }
+  // backdrop: integer-scaled like everything else; the buffer rounds up to
+  // cover the area and the extra sliver is cropped by overflow:hidden
+  const bw = Math.max(1, Math.ceil(area.width / scale));
+  const bh = Math.max(1, Math.ceil(area.height / scale));
+  if (backdropEl.width !== bw || backdropEl.height !== bh || bgScale !== scale) {
+    backdropEl.width = bw;
+    backdropEl.height = bh;
+    backdropEl.style.width = `${bw * scale}px`;
+    backdropEl.style.height = `${bh * scale}px`;
+    bgScale = scale;
+  }
+  // horizon: a few pixels of meadow grass peeking above the board's top edge
+  const floor = boardTopCss != null ? Math.round(boardTopCss / scale) - 4 : Math.round(bh * 0.42);
+  bgFloorY = Math.max(18, Math.min(bh - 12, floor));
 }
 
 window.addEventListener('resize', sizeCanvas);
@@ -744,6 +774,7 @@ window.addEventListener('orientationchange', () => requestAnimationFrame(sizeCan
 if ('ResizeObserver' in window) new ResizeObserver(sizeCanvas).observe(boardAreaEl);
 
 function frame(time: number) {
+  drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time);
   if (fight) {
     let overrides: PosOverrides | undefined;
     if (tweens.length) {
