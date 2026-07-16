@@ -549,8 +549,18 @@ function selectPiece(pieceId: number) {
   if (!p) return;
   inspect = { x: p.x, y: p.y };
   selected = p.side === 'friend' ? p.id : null;
-  hintEl.textContent = describe(p.kind);
+  hintEl.textContent = describeInFight(p);
   refreshHud();
+}
+
+/** describe(), plus what a tapped enemy's temperament means for its arrow. */
+function describeInFight(p: { kind: Kind; side: string; veiled?: boolean; fickle?: boolean }): string {
+  let txt = describe(p.kind);
+  if (p.side === 'bramble') {
+    if (p.veiled) txt += ' Shrouded — no arrow. The lit squares are everywhere it could strike.';
+    else if (p.fickle) txt += ' Fickle — two arrows, and it takes whichever looks tastier.';
+  }
+  return txt;
 }
 
 function attemptMove(pieceId: number, to: Vec) {
@@ -686,7 +696,7 @@ canvas.addEventListener('click', (ev) => {
   inspect = c;
   if (p) {
     selected = p.side === 'friend' ? p.id : null;
-    hintEl.textContent = describe(p.kind);
+    hintEl.textContent = describeInFight(p);
   } else {
     selected = null;
     inspect = null;

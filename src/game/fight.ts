@@ -1,11 +1,15 @@
 import { inBounds, isPawn, movesFor, pieceAt, threatsFor } from './board';
-import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Vec } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Telegraph, Vec } from './types';
 
 export interface Spawn {
   kind: Kind;
   x: number;
   y: number;
   spry?: boolean;
+  /** telegraphs two options, resolves the better one (later-region spice) */
+  fickle?: boolean;
+  /** shrouded: commits without showing the player its arrow */
+  veiled?: boolean;
 }
 
 export const NAIVE_DIALS: AiDials = { foresight: 0, caution: 0, bloodlust: 1, temperature: 0.5 };
@@ -257,7 +261,12 @@ function resolveTelegraphs(s: FightState) {
       continue;
     }
     if (!t.to) continue;
-    const to = landingFor(s, e, t.to);
+    let to = landingFor(s, e, t.to);
+    if (t.alt) {
+      // fickle: two committed options — take whichever is better right now
+      const altTo = landingFor(s, e, t.alt);
+      if (prize(s, altTo) > prize(s, to)) to = altTo;
+    }
     if (!to) {
       s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
       continue;
@@ -266,6 +275,13 @@ function resolveTelegraphs(s: FightState) {
     if (s.status !== 'playing') return;
   }
   s.telegraphs = [];
+}
+
+/** What a landing is worth at resolve time: the friend on it, or mere legality. */
+function prize(s: FightState, v: Vec | null): number {
+  if (!v) return -1;
+  const occ = pieceAt(s, v.x, v.y);
+  return occ && occ.side === 'friend' ? PIECE_VALUE[occ.kind] : 0;
 }
 
 /** Land e on `to`, catching (or cloaking) any friend standing there. */
@@ -379,11 +395,14 @@ function assignTelegraphs(s: FightState) {
   // move and telegraph the n meanest. Not round-robin — a capture on the table
   // gets taken by whoever can take it, not left because it "isn't their turn."
   const ranked = es
-    .map((e) => bestMove(s, e))
+    .map((e) => ({ e, ...bestMove(s, e) }))
     .filter((r) => r.to != null)
     .sort((a, b) => b.score - a.score);
   for (const r of ranked.slice(0, n)) {
-    s.telegraphs.push({ pieceId: r.id, to: r.to });
+    const t: Telegraph = { pieceId: r.id, to: r.to };
+    if (r.alt) t.alt = r.alt;
+    if (r.e.veiled) t.veiled = true;
+    s.telegraphs.push(t);
   }
   // the Heart holding still is information — keep a null telegraph so the
   // renderer can show it digging in rather than nothing at all
@@ -398,7 +417,10 @@ function assignTelegraphs(s: FightState) {
  * plans onto a covered square and would rather stand still than step into
  * danger — that's what makes penning it in a real hunt.
  */
-function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score: number } {
+function bestMove(
+  s: FightState,
+  e: Piece,
+): { id: number; to: Vec | null; score: number; alt?: Vec | null } {
   let opts = movesFor(s, e);
   if (e.kind === 'heart') {
     const cover = friendCover(s);
@@ -411,14 +433,21 @@ function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score:
   const pre = preemptable(s, e);
   let best: Vec | null = null;
   let bestScore = -Infinity;
+  let second: Vec | null = null;
+  let secondScore = -Infinity;
   for (const o of opts) {
     const score = scoreMove(s, e, o, pre);
     if (score > bestScore) {
-      bestScore = score;
+      second = best;
+      secondScore = bestScore;
       best = o;
+      bestScore = score;
+    } else if (score > secondScore) {
+      second = o;
+      secondScore = score;
     }
   }
-  return { id: e.id, to: best, score: bestScore };
+  return { id: e.id, to: best, score: bestScore, alt: e.fickle ? second : undefined };
 }
 
 /**

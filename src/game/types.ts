@@ -27,12 +27,20 @@ export interface Piece {
   y: number;
   /** honeycake'd: may also take a plain (non-capturing) one-step move */
   spry?: boolean;
+  /** commits to two squares and takes whichever is better when it moves */
+  fickle?: boolean;
+  /** commits like anyone else, but the player isn't shown the arrow */
+  veiled?: boolean;
 }
 
 /** An enemy's committed next move. `to: null` means it has nowhere to go. */
 export interface Telegraph {
   pieceId: number;
   to: Vec | null;
+  /** fickle enemies: the committed second option */
+  alt?: Vec | null;
+  /** shrouded: the renderer draws a question, not an arrow */
+  veiled?: boolean;
 }
 
 export type Rng = () => number;

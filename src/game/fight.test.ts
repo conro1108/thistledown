@@ -493,6 +493,90 @@ describe('fight loop', () => {
 });
 
 /**
+ * Telegraph degradation — the difficulty spine of the later regions.
+ * Fickle enemies commit to TWO squares and take whichever looks tastier when
+ * the dust settles; shrouded (veiled) enemies commit like anyone else but the
+ * player isn't shown the arrow, only the creature's reach on inspection.
+ */
+describe('fickle and shrouded telegraphs', () => {
+  it('a fickle creeper telegraphs its best two options', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 5, y: 5 },
+        { kind: 'hopper', x: 0, y: 2 }, // the fatter prize, up the left diagonal
+        { kind: 'sprout', x: 3, y: 3 }, // the consolation, down the right one
+      ],
+      [{ kind: 'creeper', x: 1, y: 1, fickle: true }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 0, y: 2 });
+    expect(s.telegraphs[0].alt).toEqual({ x: 3, y: 3 });
+  });
+
+  it('fickle: when the first prize dodges away, it takes the second', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 5, y: 5 },
+        { kind: 'hopper', x: 0, y: 2 },
+        { kind: 'sprout', x: 3, y: 3 },
+      ],
+      [{ kind: 'creeper', x: 1, y: 1, fickle: true }],
+    );
+    playerMove(s, idAt(s, 0, 2), { x: 1, y: 4 }); // hopper leaps clear
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect({ x: creeper.x, y: creeper.y }).toEqual({ x: 3, y: 3 }); // took the alt
+    expect(s.pieces.find((p) => p.kind === 'sprout')).toBeUndefined();
+    expect(s.pieces.find((p) => p.kind === 'hopper')).toBeDefined();
+  });
+
+  it('fickle: when the first prize stays put, it takes the first', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 5, y: 5 },
+        { kind: 'hopper', x: 0, y: 2 },
+        { kind: 'sprout', x: 3, y: 3 },
+      ],
+      [{ kind: 'creeper', x: 1, y: 1, fickle: true }],
+    );
+    playerMove(s, idAt(s, 5, 5), { x: 5, y: 4 }); // unrelated keeper shuffle
+    resolveEnemyTurn(s);
+    const creeper = s.pieces.find((p) => p.kind === 'creeper')!;
+    expect({ x: creeper.x, y: creeper.y }).toEqual({ x: 0, y: 2 });
+    expect(s.pieces.find((p) => p.kind === 'hopper')).toBeUndefined();
+    expect(s.pieces.find((p) => p.kind === 'sprout')).toBeDefined();
+  });
+
+  it('a shrouded enemy commits like anyone else — the flag just rides the telegraph', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [{ kind: 'thistle', x: 3, y: 3, veiled: true }],
+    );
+    expect(s.telegraphs[0].veiled).toBe(true);
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+    playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 });
+    resolveEnemyTurn(s);
+    expect(s.pieces.find((p) => p.kind === 'sprout')).toBeUndefined(); // it struck all the same
+  });
+
+  it('a fickle enemy with only one move telegraphs no phantom alt', () => {
+    // corner creeper with its lone diagonal cut short by its own golem
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 2 }],
+      [
+        { kind: 'creeper', x: 0, y: 0, fickle: true },
+        { kind: 'golem', x: 2, y: 2 },
+      ],
+      2,
+      3,
+      3,
+    );
+    const t = s.telegraphs.find((q) => q.pieceId === idAt(s, 0, 0))!;
+    expect(t.to).toEqual({ x: 1, y: 1 });
+    expect(t.alt == null).toBe(true);
+  });
+});
+
+/**
  * The spread clock: linger too long and the bramble sends reinforcements.
  * A marked square one turn ahead (fair warning), then a thistle sprouts.
  * This is what makes stalling — camping blocked pawns, farming promotions —

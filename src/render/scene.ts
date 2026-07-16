@@ -40,6 +40,11 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
   for (const t of telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e) continue;
+    if (t.veiled) {
+      // shrouded: it HAS committed — the player just doesn't get the arrow
+      questionGlyph(ctx, e.x, e.y);
+      continue;
+    }
     if (!t.to) {
       // nowhere to go — snoozing, not broken
       sleepGlyph(ctx, e.x, e.y);
@@ -48,13 +53,16 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     // red only for a real attack: a friend on the target square that this
     // enemy actually threatens. A friend merely blocking a pawn's forward
     // step stays purple — that arrow is going to bonk, not bite.
-    const occ = pieceAt(s, t.to.x, t.to.y);
-    const targetsFriend =
-      occ?.side === 'friend' && threatsFor(s, e).some((q) => q.x === t.to!.x && q.y === t.to!.y);
-    const col = targetsFriend ? '#e05252' : '#7a5fae';
     const from = v.posOverrides?.get(e.id) ?? e;
-    arrow(ctx, from, t.to, col);
-    corners(ctx, t.to.x, t.to.y, col);
+    const aims = t.alt ? [t.to, t.alt] : [t.to];
+    for (const aim of aims) {
+      const occ = pieceAt(s, aim.x, aim.y);
+      const targetsFriend =
+        occ?.side === 'friend' && threatsFor(s, e).some((q) => q.x === aim.x && q.y === aim.y);
+      const col = targetsFriend ? '#e05252' : '#7a5fae';
+      arrow(ctx, from, aim, col);
+      corners(ctx, aim.x, aim.y, col);
+    }
   }
 
   // the spread clock's warning: a thistle will sprout here next turn
@@ -199,6 +207,24 @@ function arrowHead(ctx: CanvasRenderingContext2D, at: Vec, sx: number, sy: numbe
     for (let j = -w; j <= w; j++) {
       ctx.fillRect(tx - sx * i + px * j, ty - sy * i + py * j, 1, 1);
     }
+  }
+}
+
+/** A "?" over a shrouded enemy: it has a plan, you just can't read it. */
+function questionGlyph(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const rows = ['.##.', '#..#', '...#', '..#.', '....', '..#.'];
+  const px = x * TILE + 10;
+  const py = y * TILE;
+  for (const [fill, ox, oy] of [
+    ['#241533', 1, 1],
+    ['#efe9f7', 0, 0],
+  ] as const) {
+    ctx.fillStyle = fill;
+    rows.forEach((row, ry) => {
+      for (let rx = 0; rx < row.length; rx++) {
+        if (row[rx] === '#') ctx.fillRect(px + rx + ox, py + ry + oy, 1, 1);
+      }
+    });
   }
 }
 
