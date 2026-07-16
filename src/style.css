@@ -324,7 +324,7 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   width: 92px;
   padding: 10px 4px 8px;
 }
@@ -336,41 +336,28 @@ canvas {
   line-height: 48px;
 }
 .opt .name { font-size: 11px; line-height: 1.2; }
+/* the faint how-it-moves reminder, tucked at the foot of a critter card */
+.opt canvas.movehint {
+  width: 26px; /* 2× the 13px buffer — integer scale, always */
+  height: 26px;
+  image-rendering: pixelated;
+  opacity: 0.75;
+}
 .opt.selected {
   border-color: var(--lantern);
   box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35);
   background: #3a3450;
 }
+.opt.selected canvas.movehint { opacity: 1; }
 
-.detail-box {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 12px;
-  /* fixed, not min-: the confirm button below must never move when a
-     selection swaps the pattern preview in or out */
-  height: 184px;
+/* the blurb line: short, fixed height so the confirm button never shifts */
+.card .detail {
+  height: 3.6em;
   overflow-y: auto;
-  background: var(--panel-2);
-  border: 1.5px solid var(--edge);
-  border-radius: 10px;
-  padding: 10px;
-}
-.detail-box canvas.pattern {
-  width: 160px; /* 2× the 80px buffer — integer scale, always */
-  height: 160px;
-  image-rendering: pixelated;
-  border-radius: 4px;
-}
-.detail-box .detail {
-  flex: 1 1 140px;
-  margin: 0;
+  margin: 12px 2px 0;
   font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink);
-  text-align: left;
+  line-height: 1.45;
+  color: var(--ink-soft);
 }
 
 .confirm:disabled {

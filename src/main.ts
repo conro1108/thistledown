@@ -1,9 +1,9 @@
 import './style.css';
-import { isPawn, movesFor, pieceAt, threatsFor } from './game/board';
+import { isPawn, movesFor, pieceAt } from './game/board';
 import { enemies, type PromotionKind } from './game/fight';
 import { KIND_INFO, REGION_NAMES, regionOf, TRINKETS, type RunState } from './game/run';
 import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
-import type { FightState, Kind, Piece, Telegraph, Vec } from './game/types';
+import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
@@ -161,24 +161,22 @@ interface SceneOption {
 }
 
 /**
- * The between-fights picker: every choice is a little card you tap to study —
- * sprite, movement pattern on a pocket meadow, blurb — and nothing commits
- * until the confirm button. One-tap-commits was brutal on a phone, and the
- * pattern preview is another rep of the whole curriculum.
+ * The between-fights picker: little cards you tap to choose. Each critter card
+ * carries a faint arrow-hint of how it moves, drawn right on the card — a
+ * quiet reminder, not the whole pocket-meadow diorama the old preview box was.
+ * A short blurb line updates on select; tap a card again to commit.
  */
 function showChoiceScene(title: string, body: string, options: SceneOption[]) {
   overlayEl.innerHTML = `<div class="card"><h2></h2><p class="scene-body"></p>
     <div class="opts"></div>
-    <div class="detail-box"><canvas class="pattern" width="80" height="80"></canvas><p class="detail"></p></div>
+    <p class="detail"></p>
     <div class="btns"><button class="confirm" disabled>Choose…</button></div></div>`;
   overlayEl.querySelector('h2')!.textContent = title;
   overlayEl.querySelector('.scene-body')!.textContent = body;
   const optsEl = overlayEl.querySelector('.opts')!;
-  const patternEl = overlayEl.querySelector<HTMLCanvasElement>('.pattern')!;
   const detailEl = overlayEl.querySelector<HTMLParagraphElement>('.detail')!;
   const confirmBtn = overlayEl.querySelector<HTMLButtonElement>('.confirm')!;
-  detailEl.textContent = 'Tap someone to hear more. Tap them again to choose.';
-  patternEl.style.visibility = 'hidden';
+  detailEl.textContent = 'Tap to hear more, tap again to choose.';
   let chosen: SceneOption | null = null;
   const cards: HTMLButtonElement[] = [];
   for (const o of options) {
@@ -201,6 +199,14 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
     nm.className = 'name';
     nm.textContent = o.label;
     b.append(nm);
+    if (o.kind) {
+      const hint = document.createElement('canvas');
+      hint.className = 'movehint';
+      hint.width = 13;
+      hint.height = 13;
+      drawMoveHint(hint.getContext('2d')!, o.kind);
+      b.append(hint);
+    }
     b.onclick = () => {
       // tapping the already-studied card commits — half the taps, still no
       // blind one-tap commits (the detail is on screen when you re-tap)
@@ -213,12 +219,6 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
       for (const c of cards) c.classList.remove('selected');
       b.classList.add('selected');
       detailEl.textContent = o.detail;
-      if (o.kind) {
-        patternEl.style.visibility = '';
-        drawPattern(patternEl, o.kind);
-      } else {
-        patternEl.style.visibility = 'hidden';
-      }
       confirmBtn.disabled = false;
       confirmBtn.textContent = o.confirm ?? 'Choose';
     };
@@ -233,32 +233,61 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
   overlayEl.classList.remove('hidden');
 }
 
-/** A 5×5 pocket meadow: everywhere this critter could go from the middle
- * (and, for the pokey-diagonal kinds, where they could strike). */
-function drawPattern(cv: HTMLCanvasElement, kind: Kind) {
-  const c = cv.getContext('2d')!;
-  const piece: Piece = { id: 1, side: 'friend', kind, x: 2, y: 2 };
-  const view = { w: 5, h: 5, pieces: [piece] } as unknown as FightState;
-  for (let y = 0; y < 5; y++) {
-    for (let x = 0; x < 5; x++) {
-      c.fillStyle = (x + y) % 2 === 0 ? '#87aa56' : '#7b9e4b';
-      c.fillRect(x * 16, y * 16, 16, 16);
+const ORTHO_D = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+const DIAG_D = [
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
+
+/**
+ * A faint 13×13 movement badge for a critter card: short arrows for steppers,
+ * long rays to the edge for sliders, an L for leapers, a forward push plus two
+ * diagonal pokes for pawns. Directions mirror the engine's MOVERS — a quiet
+ * reminder of the piece's reach, drawn on the pixel grid like everything else.
+ */
+function drawMoveHint(c: CanvasRenderingContext2D, kind: Kind) {
+  const mid = 6;
+  const col = 'rgba(255, 217, 102, 0.85)';
+  c.fillStyle = col;
+  const px = (x: number, y: number) => c.fillRect(x, y, 1, 1);
+  const ray = (dx: number, dy: number, len: number) => {
+    let x = mid;
+    let y = mid;
+    for (let i = 0; i < len; i++) {
+      x += dx;
+      y += dy;
+      px(x, y);
     }
-  }
+    // arrowhead: two pixels flaring back from the tip, perpendicular to travel
+    px(x - dx - dy, y - dy + dx);
+    px(x - dx + dy, y - dy - dx);
+  };
+
   if (isPawn(kind)) {
-    // a pawn's bite is different from its step — show both, like the board does
-    for (const t of threatsFor(view, piece)) {
-      c.fillStyle = 'rgba(224, 122, 82, 0.4)';
-      c.fillRect(t.x * 16 + 1, t.y * 16 + 1, 14, 14);
+    ray(0, -1, 3); // waddles forward
+    px(mid - 2, mid - 2); // pokes diagonally…
+    px(mid + 2, mid - 2); // …to both sides
+    return;
+  }
+  if (kind === 'hopper' || kind === 'tumbleweed') {
+    // two opposite L-leaps sketch the knight jump
+    for (const s of [1, -1]) {
+      px(mid, mid - s);
+      px(mid, mid - 2 * s);
+      px(mid + s, mid - 2 * s);
     }
+    return;
   }
-  for (const m of movesFor(view, piece)) {
-    c.fillStyle = 'rgba(255, 217, 102, 0.4)';
-    c.fillRect(m.x * 16 + 1, m.y * 16 + 1, 14, 14);
-    c.fillStyle = '#ffd966';
-    c.fillRect(m.x * 16 + 7, m.y * 16 + 7, 2, 2);
-  }
-  drawSprite(c, kind, 2 * 16 + 2, 2 * 16 + 2);
+  const dirs = kind === 'slink' || kind === 'creeper' ? DIAG_D : kind === 'rumble' || kind === 'golem' ? ORTHO_D : [...ORTHO_D, ...DIAG_D];
+  const slides = kind !== 'keeper' && kind !== 'heart'; // king-movers step, the rest slide
+  for (const [dx, dy] of dirs) ray(dx, dy, slides ? 4 : 2);
 }
 
 // ---------- run flow ----------
