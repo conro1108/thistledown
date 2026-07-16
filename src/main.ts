@@ -718,6 +718,14 @@ function drainEvents() {
       blockedNote = 'Your trap springs — the Bramble Heart scrambles for safety!';
     } else if (ev.type === 'cornered') {
       fx.push({ at: ev.at, kind: 'poof', t: 0 });
+    } else if (ev.type === 'stir') {
+      blockedNote = 'The soil stirs — the bramble is spreading! Stand on the marked square to smother it.';
+    } else if (ev.type === 'sprouted') {
+      fx.push({ at: ev.at, kind: 'shaken', t: 0 });
+      blockedNote = 'A fresh Thistle pushes up through the soil. The bramble won’t wait forever.';
+    } else if (ev.type === 'smothered') {
+      fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      blockedNote = 'Smothered underfoot — nothing grows there today! 🌼';
     } else if (ev.type === 'cloaked') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
       blockedNote = `The Dandelion Cloak whisks ${

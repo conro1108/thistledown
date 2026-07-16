@@ -55,9 +55,30 @@ export interface AiDials {
 }
 
 export interface FightEvent {
-  type: 'capture' | 'shaken' | 'blocked' | 'cloaked' | 'cornered' | 'tempo' | 'flee';
+  type:
+    | 'capture'
+    | 'shaken'
+    | 'blocked'
+    | 'cloaked'
+    | 'cornered'
+    | 'tempo'
+    | 'flee'
+    | 'stir' // the spread clock marks a square — fair warning
+    | 'sprouted' // …and a thistle grows there
+    | 'smothered'; // …unless a friend was standing on it
   at: Vec;
   kind: Kind;
+}
+
+/**
+ * The spread clock: linger past `after` turns and a thistle reinforcement
+ * sprouts at the far edge every `every` turns (never past `cap` bramble
+ * pieces). The anti-stall valve — camping a dead position stops being free.
+ */
+export interface SpreadConfig {
+  after: number;
+  every: number;
+  cap: number;
 }
 
 export interface FightState {
@@ -68,6 +89,12 @@ export interface FightState {
   telegraphs: Telegraph[];
   actsPerTurn: number;
   dials: AiDials;
+  /** reinforcement clock, if this fight has one */
+  spread?: SpreadConfig;
+  /** where the next reinforcement will sprout (telegraphed one turn ahead) */
+  pendingSprout: Vec | null;
+  /** next fresh piece id (reinforcements need ids nothing else wears) */
+  nextId: number;
   turn: number;
   status: 'playing' | 'won' | 'lost';
   rng: Rng;

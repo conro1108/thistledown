@@ -493,6 +493,105 @@ describe('fight loop', () => {
 });
 
 /**
+ * The spread clock: linger too long and the bramble sends reinforcements.
+ * A marked square one turn ahead (fair warning), then a thistle sprouts.
+ * This is what makes stalling — camping blocked pawns, farming promotions —
+ * cost something, without putting a hard timer on anyone.
+ */
+describe('the bramble spreads', () => {
+  const CLOCK = { spread: { after: 2, every: 2, cap: 5 } };
+
+  it('marks a square with fair warning, then sprouts a thistle there', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }],
+      [{ kind: 'thistle', x: 5, y: 0 }],
+      1,
+      6,
+      6,
+      CLOCK,
+    );
+    expect(s.pendingSprout).toBeNull();
+    resolveEnemyTurn(s); // turn becomes 2 = `after`: the warning appears
+    expect(s.pendingSprout).not.toBeNull();
+    expect(s.pendingSprout!.y).toBe(0);
+    expect(s.events.some((ev) => ev.type === 'stir')).toBe(true);
+    const spot = { ...s.pendingSprout! };
+    s.events = [];
+    resolveEnemyTurn(s); // and next turn it sprouts
+    expect(s.pendingSprout).toBeNull();
+    expect(s.events.some((ev) => ev.type === 'sprouted')).toBe(true);
+    const sprouted = s.pieces.filter((p) => p.side === 'bramble' && p.kind === 'thistle');
+    expect(sprouted.some((p) => p.x === spot.x && p.y === spot.y)).toBe(true);
+    expect(sprouted).toHaveLength(2);
+  });
+
+  it('a friend standing on the marked square smothers the sprout', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'duchess', x: 3, y: 5 }],
+      [{ kind: 'thistle', x: 5, y: 0 }],
+      1,
+      6,
+      6,
+      CLOCK,
+    );
+    resolveEnemyTurn(s);
+    const spot = s.pendingSprout!;
+    // park the duchess right on the warning square
+    const duchess = s.pieces.find((p) => p.kind === 'duchess')!;
+    duchess.x = spot.x;
+    duchess.y = spot.y;
+    s.events = [];
+    resolveEnemyTurn(s);
+    expect(s.pendingSprout).toBeNull();
+    expect(s.events.some((ev) => ev.type === 'smothered')).toBe(true);
+    expect(s.events.some((ev) => ev.type === 'sprouted')).toBe(false);
+    expect(s.pieces.filter((p) => p.kind === 'thistle')).toHaveLength(1);
+  });
+
+  it('the cap holds the line — no marks once the bramble is at strength', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }],
+      [
+        { kind: 'thistle', x: 5, y: 0 },
+        { kind: 'thistle', x: 3, y: 0 },
+      ],
+      1,
+      6,
+      6,
+      { spread: { after: 2, every: 2, cap: 2 } },
+    );
+    resolveEnemyTurn(s);
+    resolveEnemyTurn(s);
+    resolveEnemyTurn(s);
+    resolveEnemyTurn(s);
+    expect(s.pendingSprout).toBeNull();
+    expect(s.pieces.filter((p) => p.side === 'bramble').length).toBeLessThanOrEqual(2);
+  });
+
+  it('no spread config, no reinforcements — ever', () => {
+    const s = fight([{ kind: 'keeper', x: 0, y: 5 }], [{ kind: 'thistle', x: 5, y: 0 }]);
+    for (let i = 0; i < 20 && s.status === 'playing'; i++) resolveEnemyTurn(s);
+    expect(s.pieces.filter((p) => p.side === 'bramble').length).toBeLessThanOrEqual(1);
+    expect(s.pendingSprout).toBeNull();
+  });
+
+  it('a sprouted thistle gets a fresh id nothing else wears', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }],
+      [{ kind: 'thistle', x: 5, y: 0 }],
+      1,
+      6,
+      6,
+      CLOCK,
+    );
+    resolveEnemyTurn(s);
+    resolveEnemyTurn(s);
+    const ids = s.pieces.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+/**
  * The dials sharpen how the bramble weighs its moves. foresight sees the
  * player's reply (recaptures; free-tempo pre-captures), caution keeps pieces
  * off squares the friends cover. Naive dials (all zero) reproduce the old

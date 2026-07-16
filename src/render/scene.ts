@@ -57,6 +57,18 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     corners(ctx, t.to.x, t.to.y, col);
   }
 
+  // the spread clock's warning: a thistle will sprout here next turn
+  if (s.pendingSprout) {
+    const p = s.pendingSprout;
+    corners(ctx, p.x, p.y, '#8fc460');
+    // a tiny wiggling shoot, breaking soil on the pixel grid
+    const wob = Math.floor(time / 300) % 2;
+    ctx.fillStyle = '#8fc460';
+    ctx.fillRect(p.x * TILE + 7, p.y * TILE + 9, 2, 4);
+    ctx.fillRect(p.x * TILE + 5 + wob, p.y * TILE + 7, 2, 2);
+    ctx.fillRect(p.x * TILE + 9 - wob, p.y * TILE + 8, 2, 2);
+  }
+
   // selected friend: its legal moves
   if (v.selected != null) {
     const p = s.pieces.find((q) => q.id === v.selected);

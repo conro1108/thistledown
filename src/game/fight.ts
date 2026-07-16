@@ -1,5 +1,5 @@
 import { inBounds, isPawn, movesFor, pieceAt, threatsFor } from './board';
-import type { AiDials, FightState, Kind, Piece, Rng, Vec } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Vec } from './types';
 
 export interface Spawn {
   kind: Kind;
@@ -35,6 +35,8 @@ export interface FightConfig {
   actsPerTurn: number;
   /** how sharply the bramble plays; omitted pieces of it stay naive */
   dials?: Partial<AiDials>;
+  /** reinforcement clock — stalling past `after` turns grows fresh thistles */
+  spread?: SpreadConfig;
   /** trinkets along for this fight */
   cloak?: boolean;
   secondBreakfast?: boolean;
@@ -55,6 +57,9 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     telegraphs: [],
     actsPerTurn: cfg.actsPerTurn,
     dials: { ...NAIVE_DIALS, ...cfg.dials },
+    spread: cfg.spread,
+    pendingSprout: null,
+    nextId: id,
     turn: 1,
     status: 'playing',
     rng,
@@ -157,8 +162,41 @@ export function resolveEnemyTurn(s: FightState) {
   if (s.status !== 'playing') return;
   // a minion can wall off the heart's last free escape mid-turn
   if (settleCornered(s)) return;
+  settleSprout(s);
   s.turn++;
+  markSprout(s);
   assignTelegraphs(s);
+}
+
+// ---------- the spread clock ----------
+
+/** The warned square sprouts a thistle — unless a friend is smothering it. */
+function settleSprout(s: FightState) {
+  const spot = s.pendingSprout;
+  if (!spot) return;
+  s.pendingSprout = null;
+  if (pieceAt(s, spot.x, spot.y)) {
+    s.events.push({ type: 'smothered', at: spot, kind: 'thistle' });
+    return;
+  }
+  s.pieces.push({ id: s.nextId++, side: 'bramble', kind: 'thistle', x: spot.x, y: spot.y });
+  s.events.push({ type: 'sprouted', at: spot, kind: 'thistle' });
+}
+
+/**
+ * Every `every` turns past `after`, warn a free far-edge square (up to the
+ * cap). The warning lands a full player turn before anything grows — standing
+ * on the square smothers it, so even the clock is a tactical surface.
+ */
+function markSprout(s: FightState) {
+  const c = s.spread;
+  if (!c || s.turn < c.after || (s.turn - c.after) % c.every !== 0) return;
+  if (enemies(s).length >= c.cap) return;
+  const free: Vec[] = [];
+  for (let x = 0; x < s.w; x++) if (!pieceAt(s, x, 0)) free.push({ x, y: 0 });
+  if (!free.length) return;
+  s.pendingSprout = free[Math.floor(s.rng() * free.length)];
+  s.events.push({ type: 'stir', at: s.pendingSprout, kind: 'thistle' });
 }
 
 // ---------- the Bramble Heart ----------

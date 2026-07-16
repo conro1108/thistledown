@@ -1,7 +1,7 @@
 import { threatsFor } from './board';
 import type { FightConfig, Spawn } from './fight';
 import { mulberry32 } from './rng';
-import type { AiDials, FightState, Kind, Piece, Rng } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig } from './types';
 
 export interface Companion {
   kind: Kind;
@@ -85,6 +85,8 @@ export interface FightSpec {
   enemies: Kind[];
   /** how sharply the bramble plays here — omitted means naive (region 1 default) */
   dials?: Partial<AiDials>;
+  /** the anti-stall reinforcement clock */
+  spread?: SpreadConfig;
 }
 
 export const FIGHTS: FightSpec[] = [
@@ -93,6 +95,7 @@ export const FIGHTS: FightSpec[] = [
     intro: 'Thistles in the clover. An arrow marks the one about to move — and exactly where it’s going.',
     w: 6,
     h: 6,
+    spread: { after: 14, every: 3, cap: 5 },
     acts: 1,
     enemies: ['thistle', 'thistle', 'thistle'],
   },
@@ -101,6 +104,7 @@ export const FIGHTS: FightSpec[] = [
     intro: 'Something out here bounces in an L shape. Right over your heads.',
     w: 6,
     h: 6,
+    spread: { after: 14, every: 3, cap: 5 },
     acts: 1,
     enemies: ['thistle', 'thistle', 'tumbleweed'],
   },
@@ -109,6 +113,7 @@ export const FIGHTS: FightSpec[] = [
     intro: 'The bramble is getting bolder — two of them move every turn now.',
     w: 7,
     h: 7,
+    spread: { after: 12, every: 3, cap: 6 },
     acts: 2,
     enemies: ['thistle', 'thistle', 'tumbleweed', 'tumbleweed'],
     dials: { foresight: 0.3, caution: 0.3 },
@@ -118,6 +123,7 @@ export const FIGHTS: FightSpec[] = [
     intro: 'A creeper vine. It slides diagonally as far as it likes — mind the long lanes.',
     w: 7,
     h: 7,
+    spread: { after: 12, every: 3, cap: 6 },
     acts: 2,
     enemies: ['creeper', 'thistle', 'thistle', 'tumbleweed'],
     dials: { foresight: 0.5, caution: 0.5 },
@@ -127,6 +133,7 @@ export const FIGHTS: FightSpec[] = [
     intro: 'A root golem grinds down the straight lanes. Never stand in its row with nothing between you.',
     w: 8,
     h: 8,
+    spread: { after: 12, every: 3, cap: 7 },
     acts: 2,
     enemies: ['golem', 'creeper', 'creeper', 'thistle', 'thistle'],
     dials: { foresight: 0.7, caution: 0.6 },
@@ -136,6 +143,7 @@ export const FIGHTS: FightSpec[] = [
     intro: 'The Gloom itself. It goes anywhere, any distance, and three things move every turn. Deep breath.',
     w: 8,
     h: 8,
+    spread: { after: 12, every: 3, cap: 7 },
     acts: 3,
     enemies: ['gloom', 'golem', 'creeper', 'thistle', 'thistle'],
     dials: { foresight: 0.9, caution: 0.8 },
@@ -147,6 +155,7 @@ export const FIGHTS: FightSpec[] = [
     objective: 'Corner the Bramble Heart — leave it nowhere safe to step.',
     w: 8,
     h: 8,
+    spread: { after: 10, every: 2, cap: 7 },
     acts: 2,
     enemies: ['heart', 'golem', 'creeper', 'thistle', 'thistle'],
     dials: { foresight: 1, caution: 0.9 },
@@ -342,6 +351,7 @@ export function buildFightConfig(run: RunState): BuiltFight {
       enemies: placeEnemies(spec, run.rng, friends),
       actsPerTurn: spec.acts,
       dials: spec.dials,
+      spread: spec.spread,
       cloak: run.trinkets.includes('cloak'),
       secondBreakfast: run.trinkets.includes('breakfast'),
       whistle: run.trinkets.includes('whistle'),
