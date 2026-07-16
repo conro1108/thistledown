@@ -20,12 +20,19 @@ const SAVE_KEY = 'overgrown.save.v4';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
-    <span id="fightname">Overgrown</span><span id="trinkets"></span>
+    <span id="fightname">Overgrown</span>
+    <span id="hud-right"><button id="history-btn" class="trinket hidden" title="Look back">⏪</button><span id="trinkets"></span></span>
   </header>
   <div id="board-area">
     <canvas id="backdrop" width="1" height="1"></canvas>
     <div id="board-wrap" class="idle">
       <canvas id="board" width="96" height="96"></canvas>
+    </div>
+    <div id="history-bar" class="hidden">
+      <button id="hist-prev">‹</button>
+      <span id="hist-label"></span>
+      <button id="hist-next">›</button>
+      <button id="hist-live">Back to now</button>
     </div>
   </div>
   <div id="status">
@@ -48,6 +55,12 @@ const statusLineEl = document.querySelector<HTMLDivElement>('#status-line')!;
 const hintEl = document.querySelector<HTMLDivElement>('#hint')!;
 const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
 const overlayEl = document.querySelector<HTMLDivElement>('#overlay')!;
+const historyBtn = document.querySelector<HTMLButtonElement>('#history-btn')!;
+const historyBar = document.querySelector<HTMLDivElement>('#history-bar')!;
+const histPrev = document.querySelector<HTMLButtonElement>('#hist-prev')!;
+const histNext = document.querySelector<HTMLButtonElement>('#hist-next')!;
+const histLabel = document.querySelector<HTMLSpanElement>('#hist-label')!;
+const histLive = document.querySelector<HTMLButtonElement>('#hist-live')!;
 
 type Phase = 'player' | 'enemy';
 
@@ -69,6 +82,8 @@ let frozenTelegraphs: Telegraph[] | null = null;
 let blockedNote: string | null = null;
 /** the enemy the player just caught mid-lunge (its telegraph died with it) */
 let tempoKind: Kind | null = null;
+/** looking back through this clearing's moves (view-only, replay-built) */
+let history: { states: { f: FightState; label: string }[]; idx: number } | null = null;
 
 // ---------- session & save ----------
 
@@ -350,6 +365,8 @@ function enterFight(resume: boolean) {
   frozenTelegraphs = null;
   blockedNote = null;
   tempoKind = null;
+  history = null;
+  historyBar.classList.add('hidden');
   canvas.width = fight.w * TILE;
   canvas.height = fight.h * TILE;
   document.querySelector('#board-wrap')!.classList.remove('idle');
@@ -612,6 +629,11 @@ function refreshHud() {
   const goal = goalLabel();
   statusLineEl.textContent = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
   statusEl.className = fight.status !== 'playing' ? fight.status : phase;
+  historyBtn.classList.toggle(
+    'hidden',
+    !sess || sess.stage !== 'fight' || fight.status !== 'playing',
+  );
+  historyBtn.disabled = phase !== 'player';
   trinketsEl.innerHTML = '';
   for (const id of run.trinkets) {
     // a real button: title= tooltips don't exist on a phone
@@ -678,7 +700,7 @@ function listKinds(kinds: Kind[]): string {
 // ---------- selection & movement ----------
 
 function selectPiece(pieceId: number) {
-  if (!fight || phase !== 'player' || fight.status !== 'playing') return;
+  if (history || !fight || phase !== 'player' || fight.status !== 'playing') return;
   const p = fight.pieces.find((q) => q.id === pieceId);
   if (!p) return;
   inspect = { x: p.x, y: p.y };
@@ -802,6 +824,80 @@ function beginEnemyTurn() {
   }, PAUSE_MS);
 }
 
+// ---------- history: step back through the clearing ----------
+
+/**
+ * The decision log is the time machine: replaying its prefixes rebuilds every
+ * board state this clearing has been through, exactly. View-only — the live
+ * fight sits untouched underneath until "Back to now".
+ */
+function enterHistory() {
+  if (!sess || !fight || phase !== 'player' || sess.stage !== 'fight') return;
+  let begin = -1;
+  for (let i = sess.log.length - 1; i >= 0; i--) {
+    if (sess.log[i].t === 'begin') {
+      begin = i;
+      break;
+    }
+  }
+  if (begin < 0) return;
+  const states: { f: FightState; label: string }[] = [];
+  for (let k = begin + 1; k <= sess.log.length; k++) {
+    const e = sess.log[k - 1];
+    if (e.t !== 'begin' && e.t !== 'move' && e.t !== 'promote' && e.t !== 'resolve') continue;
+    const rebuilt = replay(sess.run.seed, sess.log.slice(0, k));
+    if (!rebuilt.fight) continue;
+    const label =
+      e.t === 'begin'
+        ? 'the clearing, untouched'
+        : e.t === 'resolve'
+          ? `turn ${rebuilt.fight.turn - 1} · the bramble moved`
+          : e.t === 'promote'
+            ? `turn ${rebuilt.fight.turn} · something blossomed`
+            : `turn ${rebuilt.fight.turn} · your move`;
+    states.push({ f: rebuilt.fight, label });
+  }
+  if (states.length < 2) return; // nothing to look back on yet
+  history = { states, idx: states.length - 1 };
+  selected = null;
+  inspect = null;
+  historyBar.classList.remove('hidden');
+  hintEl.textContent = 'Looking back. The meadow waits — nothing moves while you remember.';
+  refreshHistoryBar();
+  refreshHud();
+}
+
+function refreshHistoryBar() {
+  if (!history) return;
+  const last = history.states.length - 1;
+  histPrev.disabled = history.idx === 0;
+  histNext.disabled = history.idx === last;
+  histLabel.textContent = history.idx === last ? 'now' : history.states[history.idx].label;
+}
+
+function exitHistory() {
+  if (!history) return;
+  history = null;
+  historyBar.classList.add('hidden');
+  hintEl.textContent = DEFAULT_HINT;
+  refreshHud();
+}
+
+historyBtn.onclick = () => (history ? exitHistory() : enterHistory());
+histPrev.onclick = () => {
+  if (history && history.idx > 0) {
+    history.idx--;
+    refreshHistoryBar();
+  }
+};
+histNext.onclick = () => {
+  if (history && history.idx < history.states.length - 1) {
+    history.idx++;
+    refreshHistoryBar();
+  }
+};
+histLive.onclick = exitHistory;
+
 // ---------- input ----------
 
 function cellFromEvent(ev: MouseEvent): Vec | null {
@@ -814,7 +910,7 @@ function cellFromEvent(ev: MouseEvent): Vec | null {
 }
 
 canvas.addEventListener('click', (ev) => {
-  if (!fight || fight.status !== 'playing' || phase !== 'player') return;
+  if (history || !fight || fight.status !== 'playing' || phase !== 'player') return;
   const c = cellFromEvent(ev);
   if (!c) return;
 
@@ -932,7 +1028,10 @@ if ('ResizeObserver' in window) new ResizeObserver(sizeCanvas).observe(boardArea
 
 function frame(time: number) {
   drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time);
-  if (fight) {
+  if (history) {
+    // a remembered board: no selection, no effects, just the moment
+    draw(ctx, history.states[history.idx].f, { selected: null, hover: null, fx: [] }, time);
+  } else if (fight) {
     let overrides: PosOverrides | undefined;
     if (tweens.length) {
       const t = Math.min(1, (performance.now() - tweenStart) / tweenDur);
