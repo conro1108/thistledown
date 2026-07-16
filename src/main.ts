@@ -1,9 +1,9 @@
 import './style.css';
-import { movesFor, pieceAt } from './game/board';
+import { isPawn, movesFor, pieceAt, threatsFor } from './game/board';
 import { enemies, type PromotionKind } from './game/fight';
 import { KIND_INFO, REGION_NAMES, regionOf, TRINKETS, type RunState } from './game/run';
 import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
-import type { FightState, Kind, Telegraph, Vec } from './game/types';
+import type { FightState, Kind, Piece, Telegraph, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
@@ -128,6 +128,114 @@ function showOverlay(title: string, body: string, choices: Choice[]) {
     btns.append(b);
   }
   overlayEl.classList.remove('hidden');
+}
+
+// ---------- choice scenes ----------
+
+interface SceneOption {
+  /** the card's face: a critter sprite… */
+  kind?: Kind;
+  /** …or an emoji (trinkets, campfire comforts) */
+  icon?: string;
+  label: string;
+  detail: string;
+  /** confirm-button verb once selected */
+  confirm?: string;
+  fn: () => void;
+}
+
+/**
+ * The between-fights picker: every choice is a little card you tap to study —
+ * sprite, movement pattern on a pocket meadow, blurb — and nothing commits
+ * until the confirm button. One-tap-commits was brutal on a phone, and the
+ * pattern preview is another rep of the whole curriculum.
+ */
+function showChoiceScene(title: string, body: string, options: SceneOption[]) {
+  overlayEl.innerHTML = `<div class="card"><h2></h2><p class="scene-body"></p>
+    <div class="opts"></div>
+    <div class="detail-box"><canvas class="pattern" width="80" height="80"></canvas><p class="detail"></p></div>
+    <div class="btns"><button class="confirm" disabled>Choose…</button></div></div>`;
+  overlayEl.querySelector('h2')!.textContent = title;
+  overlayEl.querySelector('.scene-body')!.textContent = body;
+  const optsEl = overlayEl.querySelector('.opts')!;
+  const patternEl = overlayEl.querySelector<HTMLCanvasElement>('.pattern')!;
+  const detailEl = overlayEl.querySelector<HTMLParagraphElement>('.detail')!;
+  const confirmBtn = overlayEl.querySelector<HTMLButtonElement>('.confirm')!;
+  detailEl.textContent = 'Tap someone to hear more.';
+  patternEl.style.display = 'none';
+  let chosen: SceneOption | null = null;
+  const cards: HTMLButtonElement[] = [];
+  for (const o of options) {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    if (o.kind) {
+      const cv = document.createElement('canvas');
+      cv.className = 'face';
+      cv.width = 12;
+      cv.height = 12;
+      drawSprite(cv.getContext('2d')!, o.kind, 0, 0);
+      b.append(cv);
+    } else {
+      const sp = document.createElement('span');
+      sp.className = 'face';
+      sp.textContent = o.icon ?? '❓';
+      b.append(sp);
+    }
+    const nm = document.createElement('span');
+    nm.className = 'name';
+    nm.textContent = o.label;
+    b.append(nm);
+    b.onclick = () => {
+      chosen = o;
+      for (const c of cards) c.classList.remove('selected');
+      b.classList.add('selected');
+      detailEl.textContent = o.detail;
+      if (o.kind) {
+        patternEl.style.display = '';
+        drawPattern(patternEl, o.kind);
+      } else {
+        patternEl.style.display = 'none';
+      }
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = o.confirm ?? 'Choose';
+    };
+    cards.push(b);
+    optsEl.append(b);
+  }
+  confirmBtn.onclick = () => {
+    if (!chosen) return;
+    overlayEl.classList.add('hidden');
+    chosen.fn();
+  };
+  overlayEl.classList.remove('hidden');
+}
+
+/** A 5×5 pocket meadow: everywhere this critter could go from the middle
+ * (and, for the pokey-diagonal kinds, where they could strike). */
+function drawPattern(cv: HTMLCanvasElement, kind: Kind) {
+  const c = cv.getContext('2d')!;
+  const piece: Piece = { id: 1, side: 'friend', kind, x: 2, y: 2 };
+  const view = { w: 5, h: 5, pieces: [piece] } as unknown as FightState;
+  for (let y = 0; y < 5; y++) {
+    for (let x = 0; x < 5; x++) {
+      c.fillStyle = (x + y) % 2 === 0 ? '#87aa56' : '#7b9e4b';
+      c.fillRect(x * 16, y * 16, 16, 16);
+    }
+  }
+  if (isPawn(kind)) {
+    // a pawn's bite is different from its step — show both, like the board does
+    for (const t of threatsFor(view, piece)) {
+      c.fillStyle = 'rgba(224, 122, 82, 0.4)';
+      c.fillRect(t.x * 16 + 1, t.y * 16 + 1, 14, 14);
+    }
+  }
+  for (const m of movesFor(view, piece)) {
+    c.fillStyle = 'rgba(255, 217, 102, 0.4)';
+    c.fillRect(m.x * 16 + 1, m.y * 16 + 1, 14, 14);
+    c.fillStyle = '#ffd966';
+    c.fillRect(m.x * 16 + 7, m.y * 16 + 7, 2, 2);
+  }
+  drawSprite(c, kind, 2 * 16 + 2, 2 * 16 + 2);
 }
 
 // ---------- run flow ----------
@@ -291,28 +399,28 @@ function endOfFightUi() {
     return;
   }
 
-  showOverlay(
-    'Clearing won!',
-    body + ' Someone shy is watching from the tall grass…',
-    [
-      ...sess.recruitOffers.map((kind) => ({
-        label: `Befriend the ${KIND_INFO[kind].title}`,
-        sub: KIND_INFO[kind].blurb,
-        fn: () => {
-          doEntry({ t: 'recruit', kind });
-          stageUi();
-        },
-      })),
-      {
-        label: 'Travel light',
-        sub: 'No new friends this time.',
-        fn: () => {
-          doEntry({ t: 'skip' });
-          stageUi();
-        },
+  showChoiceScene('Clearing won!', body + ' Someone shy is watching from the tall grass…', [
+    ...sess.recruitOffers.map((kind) => ({
+      kind,
+      label: KIND_INFO[kind].title,
+      detail: KIND_INFO[kind].blurb,
+      confirm: `Befriend the ${KIND_INFO[kind].title}`,
+      fn: () => {
+        doEntry({ t: 'recruit', kind });
+        stageUi();
       },
-    ],
-  );
+    })),
+    {
+      icon: '🍃',
+      label: 'Travel light',
+      detail: 'No new friends this time — a smaller band moves quicker through the grass.',
+      confirm: 'Travel light',
+      fn: () => {
+        doEntry({ t: 'skip' });
+        stageUi();
+      },
+    },
+  ]);
 }
 
 function endOfRunUi() {
@@ -345,12 +453,14 @@ function endOfRunUi() {
 
 function trinketFound() {
   if (!sess) return;
-  showOverlay(
+  showChoiceScene(
     'Something glints in the grass ✨',
     'Half-buried by the path. It hums a little. You can only carry one more thing.',
     sess.trinketOffers.map((id) => ({
-      label: `${TRINKETS[id].icon} ${TRINKETS[id].title}`,
-      sub: TRINKETS[id].blurb,
+      icon: TRINKETS[id].icon,
+      label: TRINKETS[id].title,
+      detail: TRINKETS[id].blurb,
+      confirm: `Take the ${TRINKETS[id].title}`,
       fn: () => {
         doEntry({ t: 'trinket', id });
         stageUi();
@@ -363,11 +473,13 @@ function campStop() {
   if (!sess || !run) return;
   const shaken = run.companions.filter((c) => c.shaken).map((c) => c.kind);
   const snackable = run.companions.some((c) => !c.spry);
-  const choices: Choice[] = [];
+  const choices: SceneOption[] = [];
   if (shaken.length) {
     choices.push({
-      label: 'Warm mash 🍲',
-      sub: `${listKinds(shaken)} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
+      icon: '🍲',
+      label: 'Warm mash',
+      detail: `${listKinds(shaken)} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
+      confirm: 'Serve the mash',
       fn: () => {
         doEntry({ t: 'heal' });
         stageUi();
@@ -376,15 +488,19 @@ function campStop() {
   }
   if (snackable) {
     choices.push({
-      label: 'Honeycake 🍯',
-      sub: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
+      icon: '🍯',
+      label: 'Honeycake',
+      detail: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
+      confirm: 'Cut the honeycake',
       fn: honeycakeChoice,
     });
   }
   for (const id of sess.trinketOffers) {
     choices.push({
-      label: `${TRINKETS[id].icon} Take the ${TRINKETS[id].title}`,
-      sub: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
+      icon: TRINKETS[id].icon,
+      label: TRINKETS[id].title,
+      detail: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
+      confirm: `Take the ${TRINKETS[id].title}`,
       fn: () => {
         doEntry({ t: 'trinket', id });
         stageUi();
@@ -392,14 +508,16 @@ function campStop() {
     });
   }
   choices.push({
+    icon: '🔥',
     label: 'Rest quietly',
-    sub: 'Just the crackle of the fire.',
+    detail: 'Just the crackle of the fire.',
+    confirm: 'Rest',
     fn: () => {
       doEntry({ t: 'rest' });
       stageUi();
     },
   });
-  showOverlay(
+  showChoiceScene(
     'Campfire',
     'A quiet hollow off the path. The kettle whistles. There’s time for exactly one comfort.',
     choices,
@@ -408,15 +526,17 @@ function campStop() {
 
 function honeycakeChoice() {
   if (!run) return;
-  showOverlay(
+  showChoiceScene(
     'Honeycake 🍯',
     'Who gets it? (No take-backs — it is a very good cake.)',
     run.companions
       .map((c, i) => ({ c, i }))
       .filter(({ c }) => !c.spry)
       .map(({ c, i }) => ({
-        label: `A ${KIND_INFO[c.kind].title}`,
-        sub: 'Gains a plain one-step move in any direction — for good.',
+        kind: c.kind,
+        label: c.name,
+        detail: `${c.name} the ${KIND_INFO[c.kind].title} gains a plain one-step move in any direction — for good.`,
+        confirm: `Honeycake for ${c.name}`,
         fn: () => {
           doEntry({ t: 'snack', idx: i });
           stageUi();
@@ -443,12 +563,14 @@ function promotionChoice() {
   const options: PromotionKind[] = ['hopper', 'slink', 'rumble'];
   // the Duchess only answers late in the run
   if (run && run.fightIndex >= 4) options.push('duchess');
-  showOverlay(
+  showChoiceScene(
     'Something blossoms ✨',
     'Crossing the whole meadow changes a critter. Who do they become?',
     options.map((kind) => ({
+      kind,
       label: KIND_INFO[kind].title,
-      sub: KIND_INFO[kind].blurb,
+      detail: KIND_INFO[kind].blurb,
+      confirm: `Become a ${KIND_INFO[kind].title}`,
       fn: () => {
         doEntry({ t: 'promote', kind });
         drainEvents();
