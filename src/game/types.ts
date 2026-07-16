@@ -73,7 +73,8 @@ export interface FightEvent {
     | 'flee'
     | 'stir' // the spread clock marks a square — fair warning
     | 'sprouted' // …and a thistle grows there
-    | 'smothered'; // …unless a friend was standing on it
+    | 'smothered' // …unless a friend was standing on it
+    | 'twisted'; // a thistle reached the friends' home row and promoted
   at: Vec;
   kind: Kind;
 }

@@ -855,6 +855,9 @@ function drainEvents() {
     } else if (ev.type === 'sprouted') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
       blockedNote = 'A fresh Thistle pushes up through the soil. The bramble won’t wait forever.';
+    } else if (ev.type === 'twisted') {
+      fx.push({ at: ev.at, kind: 'shaken', t: 0 });
+      blockedNote = 'The Thistle reaches your hedge and twists into a Gloom! Never let one walk the whole meadow.';
     } else if (ev.type === 'smothered') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       blockedNote = 'Smothered underfoot — nothing grows there today! 🌼';

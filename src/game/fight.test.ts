@@ -120,6 +120,26 @@ describe('fight loop', () => {
     expect(s.pieces.find((p) => p.kind === 'hopper')!.spry).toBe(true);
   });
 
+  it('a thistle reaching the friends’ home row twists into a gloom', () => {
+    const s = fight([{ kind: 'keeper', x: 0, y: 4 }], [{ kind: 'thistle', x: 5, y: 4 }]);
+    expect(s.telegraphs[0].to).toEqual({ x: 5, y: 5 }); // its forward push, onto the home row
+    playerMove(s, idAt(s, 0, 4), { x: 0, y: 3 });
+    resolveEnemyTurn(s);
+    const g = s.pieces.find((p) => p.side === 'bramble')!;
+    expect(g).toMatchObject({ x: 5, y: 5, kind: 'gloom' });
+    expect(s.events.some((ev) => ev.type === 'twisted')).toBe(true);
+  });
+
+  it('a friend pawn does not twist — it blossoms via the promotion choice', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 5, y: 1 }],
+      [{ kind: 'thistle', x: 0, y: 0 }],
+    );
+    playerMove(s, idAt(s, 5, 1), { x: 5, y: 0 });
+    expect(s.pendingPromotion).not.toBeNull();
+    expect(s.events.some((ev) => ev.type === 'twisted')).toBe(false);
+  });
+
   it('cornering the Bramble Heart wins: covered square + no safe step', () => {
     // rumbles cover column 0 (incl. the heart), column 1, and row 1 — every
     // square the heart stands on or could step to is threatened.

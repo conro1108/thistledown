@@ -303,6 +303,12 @@ function land(s: FightState, e: Piece, to: Vec) {
   }
   e.x = to.x;
   e.y = to.y;
+  // the promotion rule cuts both ways: a bramble pawn that walks the whole
+  // meadow twists into a gloom — a passed pawn is never safe to ignore
+  if (e.side === 'bramble' && isPawn(e.kind) && e.y === s.h - 1) {
+    e.kind = 'gloom';
+    s.events.push({ type: 'twisted', at: { x: e.x, y: e.y }, kind: 'gloom' });
+  }
 }
 
 /**
