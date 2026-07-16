@@ -37,6 +37,23 @@ export interface Telegraph {
 
 export type Rng = () => number;
 
+/**
+ * How sharply the bramble side weighs its moves. All zeros is the naive
+ * greedy mind of region 1 — it gifts tempo and walks into danger, and being
+ * punished for that is exactly what those early fights teach. Later regions
+ * turn these up; strength-of-play is a difficulty dial like any other.
+ */
+export interface AiDials {
+  /** 0..1 — sees the player's reply: recaptures after landing, free pre-captures */
+  foresight: number;
+  /** 0..1 — reluctance to finish a quiet move on a square the friends cover */
+  caution: number;
+  /** multiplier on capture appetite (1 = normal) */
+  bloodlust: number;
+  /** score jitter that keeps move choice from being robotic (0 = none) */
+  temperature: number;
+}
+
 export interface FightEvent {
   type: 'capture' | 'shaken' | 'blocked' | 'cloaked' | 'cornered' | 'tempo' | 'flee';
   at: Vec;
@@ -50,6 +67,7 @@ export interface FightState {
   pieces: Piece[];
   telegraphs: Telegraph[];
   actsPerTurn: number;
+  dials: AiDials;
   turn: number;
   status: 'playing' | 'won' | 'lost';
   rng: Rng;

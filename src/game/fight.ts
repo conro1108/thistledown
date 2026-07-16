@@ -1,5 +1,5 @@
 import { inBounds, isPawn, movesFor, pieceAt, threatsFor } from './board';
-import type { FightState, Kind, Piece, Rng, Vec } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng, Vec } from './types';
 
 export interface Spawn {
   kind: Kind;
@@ -8,6 +8,24 @@ export interface Spawn {
   spry?: boolean;
 }
 
+export const NAIVE_DIALS: AiDials = { foresight: 0, caution: 0, bloodlust: 1, temperature: 0.5 };
+
+/** Chess piece values in disguise — the exchange math the dials reason with. */
+export const PIECE_VALUE: Record<Kind, number> = {
+  keeper: 1000,
+  sprout: 10,
+  hopper: 30,
+  slink: 30,
+  rumble: 50,
+  duchess: 90,
+  thistle: 10,
+  tumbleweed: 30,
+  creeper: 30,
+  golem: 50,
+  gloom: 90,
+  heart: 0, // can't be captured; it plays by the king rule instead
+};
+
 export interface FightConfig {
   name: string;
   w: number;
@@ -15,6 +33,8 @@ export interface FightConfig {
   friends: Spawn[];
   enemies: Spawn[];
   actsPerTurn: number;
+  /** how sharply the bramble plays; omitted pieces of it stay naive */
+  dials?: Partial<AiDials>;
   /** trinkets along for this fight */
   cloak?: boolean;
   secondBreakfast?: boolean;
@@ -34,6 +54,7 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     pieces,
     telegraphs: [],
     actsPerTurn: cfg.actsPerTurn,
+    dials: { ...NAIVE_DIALS, ...cfg.dials },
     turn: 1,
     status: 'playing',
     rng,
@@ -335,9 +356,9 @@ function assignTelegraphs(s: FightState) {
 }
 
 /**
- * Prefer capturing the keeper, then any friend, else drift toward the keeper.
- * The Heart never plans onto a covered square and would rather stand still
- * than step into danger — that's what makes penning it in a real hunt.
+ * The best move by the fight's dials. The Heart is its own mind: it never
+ * plans onto a covered square and would rather stand still than step into
+ * danger — that's what makes penning it in a real hunt.
  */
 function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score: number } {
   let opts = movesFor(s, e);
@@ -347,11 +368,75 @@ function bestMove(s: FightState, e: Piece): { id: number; to: Vec | null; score:
     if (opts.length === 0 && !cover.has(e.y * 64 + e.x)) {
       return { id: e.id, to: null, score: -Infinity }; // safer right here — don't move
     }
+    return { id: e.id, ...pickBest(s, opts) };
   }
-  return { id: e.id, ...pickBest(s, opts) };
+  const pre = preemptable(s, e);
+  let best: Vec | null = null;
+  let bestScore = -Infinity;
+  for (const o of opts) {
+    const score = scoreMove(s, e, o, pre);
+    if (score > bestScore) {
+      bestScore = score;
+      best = o;
+    }
+  }
+  return { id: e.id, to: best, score: bestScore };
 }
 
-/** The meanest of the given options: keeper capture > any capture > drift toward the keeper. */
+/**
+ * One candidate move, weighed by the dials. A capture is worth its victim,
+ * minus (foresight permitting) the mover when the landing square is covered —
+ * a recapture is coming — and discounted when the player can simply take the
+ * mover first at a profit: a telegraph the player is happy to preempt is a
+ * tempo gift, and the pawn-chain ride was made of exactly those. Quiet moves
+ * drift toward the keeper, and caution keeps them off covered squares.
+ */
+function scoreMove(s: FightState, e: Piece, to: Vec, preempted: boolean): number {
+  const d = s.dials;
+  const victim = pieceAt(s, to.x, to.y); // legality means friend or empty
+  let score: number;
+  if (victim) {
+    let gain = d.bloodlust * PIECE_VALUE[victim.kind];
+    if (preempted) gain *= 1 - 0.8 * d.foresight;
+    score = gain - (exposedAt(s, e, to, victim.id) ? d.foresight * PIECE_VALUE[e.kind] : 0);
+  } else {
+    const k = keeper(s);
+    score = k ? -(Math.abs(to.x - k.x) + Math.abs(to.y - k.y)) : 0;
+    if (d.caution > 0 && exposedAt(s, e, to)) score -= d.caution * PIECE_VALUE[e.kind];
+  }
+  return score + s.rng() * d.temperature; // jitter so equal moves aren't robotic
+}
+
+/** Would a friend cover (be able to land on) `to` with e standing there? */
+function exposedAt(s: FightState, e: Piece, to: Vec, victimId?: number): boolean {
+  const pieces = s.pieces
+    .filter((p) => p.id !== e.id && p.id !== victimId)
+    .concat([{ ...e, x: to.x, y: to.y }]);
+  const view = { ...s, pieces };
+  return pieces.some(
+    (p) => p.side === 'friend' && threatsFor(view, p).some((t) => t.x === to.x && t.y === to.y),
+  );
+}
+
+/**
+ * Whether the player can profitably capture e before its telegraph fires —
+ * they always move first, so an attacked enemy never gets to dodge. Profitable
+ * means e is undefended, or worth more than the cheapest friend attacking it.
+ */
+function preemptable(s: FightState, e: Piece): boolean {
+  let cheapest = Infinity;
+  let defended = false;
+  for (const p of s.pieces) {
+    if (p.id === e.id) continue;
+    if (!threatsFor(s, p).some((t) => t.x === e.x && t.y === e.y)) continue;
+    if (p.side === 'friend') cheapest = Math.min(cheapest, PIECE_VALUE[p.kind]);
+    else defended = true;
+  }
+  if (cheapest === Infinity) return false;
+  return !defended || PIECE_VALUE[e.kind] > cheapest;
+}
+
+/** The Heart's taste in squares: keeper capture > any capture > drift toward the keeper. */
 function pickBest(s: FightState, opts: Vec[]): { to: Vec | null; score: number } {
   const k = keeper(s);
   let best: Vec | null = null;

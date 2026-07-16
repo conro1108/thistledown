@@ -1,7 +1,7 @@
 import { threatsFor } from './board';
 import type { FightConfig, Spawn } from './fight';
 import { mulberry32 } from './rng';
-import type { FightState, Kind, Piece, Rng } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng } from './types';
 
 export interface Companion {
   kind: Kind;
@@ -83,6 +83,8 @@ export interface FightSpec {
   acts: number;
   /** which kinds appear — buildFightConfig rolls their actual squares fresh each run */
   enemies: Kind[];
+  /** how sharply the bramble plays here — omitted means naive (region 1 default) */
+  dials?: Partial<AiDials>;
 }
 
 export const FIGHTS: FightSpec[] = [
@@ -109,6 +111,7 @@ export const FIGHTS: FightSpec[] = [
     h: 7,
     acts: 2,
     enemies: ['thistle', 'thistle', 'tumbleweed', 'tumbleweed'],
+    dials: { foresight: 0.3, caution: 0.3 },
   },
   {
     name: 'Bramble Gate',
@@ -117,6 +120,7 @@ export const FIGHTS: FightSpec[] = [
     h: 7,
     acts: 2,
     enemies: ['creeper', 'thistle', 'thistle', 'tumbleweed'],
+    dials: { foresight: 0.5, caution: 0.5 },
   },
   {
     name: 'Root Cellar',
@@ -125,6 +129,7 @@ export const FIGHTS: FightSpec[] = [
     h: 8,
     acts: 2,
     enemies: ['golem', 'creeper', 'creeper', 'thistle', 'thistle'],
+    dials: { foresight: 0.7, caution: 0.6 },
   },
   {
     name: 'Gloom Hollow',
@@ -133,6 +138,7 @@ export const FIGHTS: FightSpec[] = [
     h: 8,
     acts: 3,
     enemies: ['gloom', 'golem', 'creeper', 'thistle', 'thistle'],
+    dials: { foresight: 0.9, caution: 0.8 },
   },
   {
     name: 'The Bramble Heart',
@@ -143,6 +149,7 @@ export const FIGHTS: FightSpec[] = [
     h: 8,
     acts: 2,
     enemies: ['heart', 'golem', 'creeper', 'thistle', 'thistle'],
+    dials: { foresight: 1, caution: 0.9 },
   },
 ];
 
@@ -334,6 +341,7 @@ export function buildFightConfig(run: RunState): BuiltFight {
       friends,
       enemies: placeEnemies(spec, run.rng, friends),
       actsPerTurn: spec.acts,
+      dials: spec.dials,
       cloak: run.trinkets.includes('cloak'),
       secondBreakfast: run.trinkets.includes('breakfast'),
       whistle: run.trinkets.includes('whistle'),

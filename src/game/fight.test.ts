@@ -491,3 +491,107 @@ describe('fight loop', () => {
     }
   });
 });
+
+/**
+ * The dials sharpen how the bramble weighs its moves. foresight sees the
+ * player's reply (recaptures; free-tempo pre-captures), caution keeps pieces
+ * off squares the friends cover. Naive dials (all zero) reproduce the old
+ * greedy behavior — that's region 1, where getting punished IS the lesson.
+ */
+describe('the bramble mind (AI dials)', () => {
+  const SHARP = { dials: { foresight: 1, caution: 1 } };
+
+  it('naive: a thistle gifts itself — telegraphs a capture of a defended piece it stands attacked by', () => {
+    // keeper defends the sprout; the sprout attacks the thistle. Taking is a
+    // pure tempo gift (the player just takes the thistle first), and the old
+    // greedy AI takes it every time. Regression-pin that for naive dials.
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+  });
+
+  it('sharp: the same thistle declines the gift and pushes on instead', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+      1,
+      6,
+      6,
+      SHARP,
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 4 });
+  });
+
+  it('sharp: a golem will not trade itself for a defended sprout', () => {
+    // golem's lane reaches the sprout, but the keeper guards it: 50 for 10 is
+    // a terrible trade, so a sharp golem grinds closer instead
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [{ kind: 'golem', x: 4, y: 0 }],
+      1,
+      6,
+      6,
+      SHARP,
+    );
+    expect(s.telegraphs[0].to).not.toEqual({ x: 4, y: 4 });
+  });
+
+  it('naive: the same golem takes the defended sprout anyway', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'sprout', x: 4, y: 4 }],
+      [{ kind: 'golem', x: 4, y: 0 }],
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
+  });
+
+  it('caution: a tumbleweed will not land on a covered square just to get closer', () => {
+    // (2,3) is the closest leap to the keeper but the sprout covers it
+    const naive = fight(
+      [{ kind: 'keeper', x: 2, y: 5 }, { kind: 'sprout', x: 1, y: 4 }],
+      [{ kind: 'tumbleweed', x: 3, y: 1 }],
+    );
+    expect(naive.telegraphs[0].to).toEqual({ x: 2, y: 3 });
+    const sharp = fight(
+      [{ kind: 'keeper', x: 2, y: 5 }, { kind: 'sprout', x: 1, y: 4 }],
+      [{ kind: 'tumbleweed', x: 3, y: 1 }],
+      1,
+      6,
+      6,
+      SHARP,
+    );
+    expect(sharp.telegraphs[0].to).not.toEqual({ x: 2, y: 3 });
+  });
+
+  it('sharp: a winning trade is still taken — pawn snags a defended slink', () => {
+    // slink (30) for thistle (10) is worth it even with the keeper recapturing;
+    // and the thistle is defended by the creeper, so pre-capturing it costs the
+    // player more than it saves — no reason to hold back
+    const s = fight(
+      [{ kind: 'keeper', x: 4, y: 4 }, { kind: 'slink', x: 3, y: 3 }],
+      [
+        { kind: 'thistle', x: 2, y: 2 },
+        { kind: 'creeper', x: 1, y: 1 },
+      ],
+      1,
+      6,
+      6,
+      SHARP,
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 3 });
+    expect(s.telegraphs[0].pieceId).toBe(idAt(s, 2, 2));
+  });
+
+  it('sharp: the keeper is always worth it, guarded or not', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 4, y: 5 }, { kind: 'slink', x: 2, y: 3 }],
+      [{ kind: 'golem', x: 4, y: 0 }],
+      1,
+      6,
+      6,
+      SHARP,
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 5 });
+  });
+});
