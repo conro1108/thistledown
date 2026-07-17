@@ -174,11 +174,11 @@ describe('the ladder (generateFights)', () => {
     });
   });
 
-  it('the training wheels come off on schedule: no fickle before the Thicket, no shrouds before the Tanglewood', () => {
+  it('the training wheels come off on schedule: no fickle before Hedgerow, no shrouds before the Tanglewood', () => {
     for (let seed = 0; seed < 60; seed++) {
       const fights = generateFights(seed);
       fights.forEach((f, i) => {
-        if (i < 5) expect(f.enemies.some((e) => e.fickle)).toBe(false);
+        if (i < 2) expect(f.enemies.some((e) => e.fickle)).toBe(false);
         if (i < 8) expect(f.enemies.some((e) => e.veiled)).toBe(false);
         expect(f.enemies.length).toBeGreaterThanOrEqual(3); // never an empty clearing
       });

@@ -133,7 +133,7 @@ const COST: Partial<Record<Kind, number>> = {
 const CORNER_HEART = 'Corner it — leave it nowhere safe to step.';
 
 const TEMPLATES: FightTemplate[] = [
-  // -------- The Meadow: full telegraphs, a naive-ish bramble, one lesson each --------
+  // -------- The Meadow: a naive-ish bramble, one lesson each — fickle double-arrows creep in by fight 3 --------
   {
     name: 'Meadow Edge',
     intro: 'Thistles in the clover. An arrow marks the one about to move — and exactly where it’s going.',
@@ -159,14 +159,16 @@ const TEMPLATES: FightTemplate[] = [
   },
   {
     name: 'Hedgerow',
-    intro: 'The bramble is getting bolder — two of them move every turn now.',
+    intro:
+      'The bramble is getting bolder — two of them move every turn now, and that one shows two arrows at once. It means both, and takes whichever looks tastier.',
     w: 7,
     h: 7,
     acts: 2,
     spread: { after: 10, every: 3, cap: 6 },
-    core: [{ kind: 'thistle' }, { kind: 'tumbleweed' }, { kind: 'tumbleweed' }],
+    core: [{ kind: 'thistle' }, { kind: 'tumbleweed' }, { kind: 'tumbleweed', fickle: true }],
     budget: 3,
     pool: ['thistle'],
+    fickleChance: 0.4,
     dials: { foresight: 0.3, caution: 0.3 },
   },
   {
@@ -181,9 +183,10 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'heart' }, { kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
     budget: 1,
     pool: ['thistle'],
+    fickleChance: 0.4,
     dials: { foresight: 0.4, caution: 0.4 },
   },
-  // -------- The Thicket: sliders everywhere, and the first fickle arrows --------
+  // -------- The Thicket: sliders everywhere, and fickle arrows in full swing --------
   {
     name: 'Bramble Gate',
     intro:
@@ -195,6 +198,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.4,
     dials: { foresight: 0.5, caution: 0.4 },
   },
   {
@@ -208,7 +212,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'tumbleweed', fickle: true }, { kind: 'creeper', fickle: true }, { kind: 'thistle' }],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
-    fickleChance: 0.5,
+    fickleChance: 0.7,
     dials: { foresight: 0.5, caution: 0.5 },
   },
   {
@@ -221,7 +225,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed'],
-    fickleChance: 0.4,
+    fickleChance: 0.6,
     dials: { foresight: 0.6, caution: 0.5 },
   },
   {
@@ -234,7 +238,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
-    fickleChance: 0.4,
+    fickleChance: 0.6,
     dials: { foresight: 0.7, caution: 0.6 },
   },
   // -------- The Tanglewood: shrouded intent — read reaches, not arrows --------
@@ -254,7 +258,7 @@ const TEMPLATES: FightTemplate[] = [
     ],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
-    fickleChance: 0.2,
+    fickleChance: 0.4,
     dials: { foresight: 0.7, caution: 0.6 },
   },
   {
@@ -268,6 +272,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'golem', veiled: true }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.4,
     veiledChance: 0.3,
     dials: { foresight: 0.8, caution: 0.7 },
   },
@@ -281,7 +286,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'tumbleweed' }],
     budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
-    fickleChance: 0.3,
+    fickleChance: 0.5,
     veiledChance: 0.3,
     dials: { foresight: 0.9, caution: 0.8 },
   },
@@ -303,6 +308,7 @@ const TEMPLATES: FightTemplate[] = [
     ],
     budget: 2,
     pool: ['thistle'],
+    fickleChance: 0.4,
     dials: { foresight: 0.9, caution: 0.8 },
   },
   // -------- The Deep Bramble: everything at once, no mercy left --------
@@ -316,6 +322,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'gloom', veiled: true }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.4,
     veiledChance: 0.4,
     dials: { foresight: 0.9, caution: 0.8 },
   },
@@ -329,7 +336,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'golem' }, { kind: 'golem', veiled: true }, { kind: 'creeper', fickle: true }],
     budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
-    fickleChance: 0.3,
+    fickleChance: 0.5,
     veiledChance: 0.3,
     dials: { foresight: 1, caution: 0.9 },
   },
@@ -343,7 +350,7 @@ const TEMPLATES: FightTemplate[] = [
     core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'tumbleweed', veiled: true }, { kind: 'thistle' }],
     budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
-    fickleChance: 0.3,
+    fickleChance: 0.5,
     veiledChance: 0.3,
     dials: { foresight: 1, caution: 0.9 },
   },
@@ -365,6 +372,7 @@ const TEMPLATES: FightTemplate[] = [
     ],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.4,
     dials: { foresight: 1, caution: 1 },
   },
 ];
