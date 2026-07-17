@@ -79,6 +79,26 @@ export function newSession(seed: number): Session {
   };
 }
 
+/**
+ * Player moves made in the clearing being fought right now — everything since
+ * the last 'begin'. The scoreboard's "cleared in N moves" reads this the moment
+ * a clearing falls. (Promotions, waits and camp choices aren't moves.)
+ */
+export function movesThisClearing(s: Session): number {
+  let n = 0;
+  for (let i = s.log.length - 1; i >= 0; i--) {
+    const e = s.log[i];
+    if (e.t === 'begin') break;
+    if (e.t === 'move') n++;
+  }
+  return n;
+}
+
+/** Every player move logged across the whole run — the win screen's run total. */
+export function totalMoves(s: Session): number {
+  return s.log.reduce((n, e) => n + (e.t === 'move' ? 1 : 0), 0);
+}
+
 /** Apply one decision. Returns false (state untouched) if it doesn't fit the stage. */
 export function apply(s: Session, e: LogEntry): boolean {
   if (!step(s, e)) return false;

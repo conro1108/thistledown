@@ -2,7 +2,16 @@ import './style.css';
 import { isPawn, movesFor, pieceAt } from './game/board';
 import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
 import { KIND_INFO, REGION_NAMES, regionOf, scaleDials, TRINKETS, type RunState } from './game/run';
-import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
+import {
+  apply,
+  movesThisClearing,
+  newSession,
+  replay,
+  retryFight,
+  totalMoves,
+  type LogEntry,
+  type Session,
+} from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
@@ -16,6 +25,7 @@ const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 // v4: four regions of four, retuned dials/spread, bramble promotion, true-mate
 // cornering — older decision logs no longer replay faithfully, so let them go
 const SAVE_KEY = 'overgrown.save.v4';
+const SCORES_KEY = 'overgrown.scores.v1';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -122,6 +132,65 @@ function loadSave(): Session | null {
     return null;
   }
 }
+
+// ---------- hiscores: fewest moves, per clearing and per whole run ----------
+
+/** Personal bests, persisted across runs: fewest moves to clear each named
+ * clearing, and fewest total moves to win a whole run. */
+interface Scores {
+  clearings: Record<string, number>;
+  run?: number;
+}
+
+function loadScores(): Scores {
+  try {
+    const raw = localStorage.getItem(SCORES_KEY);
+    const s = raw ? (JSON.parse(raw) as Partial<Scores>) : null;
+    if (s && typeof s === 'object') return { clearings: s.clearings ?? {}, run: s.run };
+  } catch {
+    /* corrupt or blocked — start the board fresh */
+  }
+  return { clearings: {} };
+}
+
+function saveScores(s: Scores) {
+  try {
+    localStorage.setItem(SCORES_KEY, JSON.stringify(s));
+  } catch {
+    /* fine — the record just won't persist */
+  }
+}
+
+/**
+ * Fold a result into the saved bests. Returns the best now on file and whether
+ * this run just set it. Hand-tuned (dev-dirty) sessions never touch the board —
+ * a record you dialed up in the dev panel isn't a record.
+ */
+function recordClearing(name: string, moves: number): { best?: number; improved: boolean } {
+  const scores = loadScores();
+  const prev = scores.clearings[name];
+  if (devDirty) return { best: prev, improved: false };
+  const improved = prev === undefined || moves < prev;
+  if (improved) {
+    scores.clearings[name] = moves;
+    saveScores(scores);
+  }
+  return { best: improved ? moves : prev, improved };
+}
+
+function recordRun(moves: number): { best?: number; improved: boolean } {
+  const scores = loadScores();
+  const prev = scores.run;
+  if (devDirty) return { best: prev, improved: false };
+  const improved = prev === undefined || moves < prev;
+  if (improved) {
+    scores.run = moves;
+    saveScores(scores);
+  }
+  return { best: improved ? moves : prev, improved };
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 // ---------- overlays ----------
 
@@ -292,10 +361,13 @@ function title() {
     sub: saved ? 'The old path grows over.' : undefined,
     fn: startRun,
   });
+  const runBest = loadScores().run;
+  const bestNote = runBest !== undefined ? ` <span class="objective">🏆 Best run: ${plural(runBest, 'move')}</span>` : '';
   showOverlay(
     'Overgrown 🌼',
     'The meadow is overgrown and the Keeper’s lantern is lit. Lead your friends, ' +
-      'read the bramble’s intentions, and take the meadow back one clearing at a time.',
+      'read the bramble’s intentions, and take the meadow back one clearing at a time.' +
+      bestNote,
     choices,
   );
 }
@@ -416,7 +488,15 @@ function endOfFightUi() {
   const shakenNote = shaken.length
     ? ` ${listKinds(shaken)} ${shaken.length > 1 ? 'are' : 'is'} a bit shaken and will sit the next one out.`
     : '';
-  const body = `The brambles scatter into flowers.${shakenNote}`;
+  // fewest-moves record for the clearing that just fell
+  const moves = movesThisClearing(sess);
+  const rec = recordClearing(fight?.name ?? 'this clearing', moves);
+  const movesNote = rec.improved
+    ? ` Cleared in ${plural(moves, 'move')} — a new best! 🌟`
+    : rec.best !== undefined
+      ? ` Cleared in ${plural(moves, 'move')} (best ${rec.best}).`
+      : ` Cleared in ${plural(moves, 'move')}.`;
+  const body = `The brambles scatter into flowers.${shakenNote}${movesNote}`;
 
   if (!sess.recruitOffers) {
     showOverlay('Clearing won!', body + ' Camp is full of friends already.', [
@@ -471,11 +551,18 @@ function endOfRunUi() {
     return;
   }
   const friends = run.companions.filter((c) => !c.shaken).length;
+  const moves = sess ? totalMoves(sess) : 0;
+  const rec = recordRun(moves);
+  const runNote = rec.improved
+    ? ` And in just ${plural(moves, 'move')} — a new record! 🏆`
+    : rec.best !== undefined
+      ? ` You did it in ${plural(moves, 'move')} (best ${rec.best}).`
+      : ` You did it in ${plural(moves, 'move')}.`;
   showOverlay(
     'The meadow is quiet 🌼',
     'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
       `You won the whole thing — ${run.fights.length} clearings taken back, ` +
-      `and ${friends + 1} of you walking home for tea.`,
+      `and ${friends + 1} of you walking home for tea.${runNote}`,
     [{ label: 'New run', fn: startRun }],
   );
   rainPetals();
@@ -1027,9 +1114,7 @@ function showDevPanel() {
     diffSlider.value = String(v);
   };
   readout();
-  diffSlider.oninput = () => {
-    const v = parseFloat(diffSlider.value);
-    if (Number.isNaN(v)) return;
+  const setDifficulty = (v: number) => {
     markDevDirty();
     run!.difficulty = v;
     // reflect it on the live fight right away by re-deriving from this
@@ -1041,8 +1126,26 @@ function showDevPanel() {
     readout();
     refreshHud();
   };
+  diffSlider.oninput = () => {
+    const v = parseFloat(diffSlider.value);
+    if (!Number.isNaN(v)) setDifficulty(v);
+  };
   diffRow.append(diffLabel, diffSlider);
   diffBox.append(diffRow);
+  // named style presets: one tap to a whole play-feel, no dial fiddling
+  const STYLES: { label: string; factor: number }[] = [
+    { label: '🍵 Cozy', factor: 0 },
+    { label: '🌿 Gentle', factor: 0.5 },
+    { label: '⚖️ Balanced', factor: 1 },
+    { label: '🔥 Sharp', factor: 1.5 },
+    { label: '🐺 Relentless', factor: 2 },
+  ];
+  for (const st of STYLES) {
+    const b = document.createElement('button');
+    b.textContent = st.label;
+    b.onclick = () => setDifficulty(st.factor);
+    diffBox.append(b);
+  }
 
   if (fight && fight.status === 'playing') {
     const f = fight;

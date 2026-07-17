@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { movesFor, pieceAt } from './board';
-import { apply, newSession, replay, retryFight, type Session } from './session';
+import {
+  apply,
+  movesThisClearing,
+  newSession,
+  replay,
+  retryFight,
+  totalMoves,
+  type Session,
+} from './session';
 
 /**
  * A deterministic headless player: always the first legal move of the first
@@ -64,6 +72,66 @@ describe('session', () => {
       const rebuilt = replay(seed, live.log);
       expect(snap(rebuilt)).toEqual(snap(live));
     }
+  });
+
+  it('counts moves per clearing and across the run, ignoring non-moves', () => {
+    const s = newSession(3);
+    expect(movesThisClearing(s)).toBe(0);
+    expect(totalMoves(s)).toBe(0);
+    apply(s, { t: 'begin' }); // 'begin' is not a move
+    expect(movesThisClearing(s)).toBe(0);
+
+    // make a handful of real moves in this one clearing (with the bramble
+    // answering between them), then confirm both counters see exactly those
+    let moves = 0;
+    for (let i = 0; i < 6 && s.stage === 'fight'; i++) {
+      if (s.resolveDue) {
+        apply(s, { t: 'resolve' });
+        continue;
+      }
+      const f = s.fight!;
+      const p = f.pieces.find((q) => q.side === 'friend' && movesFor(f, q).length)!;
+      apply(s, { t: 'move', id: p.id, to: movesFor(f, p)[0] });
+      moves++;
+    }
+    expect(moves).toBeGreaterThan(0);
+    expect(movesThisClearing(s)).toBe(moves);
+    expect(totalMoves(s)).toBe(moves); // still the first clearing, so they agree
+  });
+
+  it('the per-clearing counter resets each clearing while the run total keeps climbing', () => {
+    // a capture-seeker actually clears clearings, so we get a second 'begin'
+    const grab = (s: Session): boolean => {
+      if (s.stage !== 'fight') return botTurn(s);
+      const f = s.fight!;
+      if (s.resolveDue) return apply(s, { t: 'resolve' });
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        for (const m of movesFor(f, p)) {
+          const occ = pieceAt(f, m.x, m.y);
+          if (occ?.side === 'bramble' && occ.kind !== 'heart') return apply(s, { t: 'move', id: p.id, to: m });
+        }
+      }
+      const foes = f.pieces.filter((p) => p.side === 'bramble');
+      let best: { id: number; to: { x: number; y: number }; dist: number } | null = null;
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        for (const m of movesFor(f, p)) {
+          const dist = Math.min(...foes.map((e) => Math.abs(e.x - m.x) + Math.abs(e.y - m.y)));
+          if (!best || dist < best.dist) best = { id: p.id, to: m, dist };
+        }
+      }
+      return best ? apply(s, { t: 'move', id: best.id, to: best.to }) : botTurn(s);
+    };
+
+    const s = newSession(7);
+    for (let i = 0; i < 800 && s.run.fightIndex < 1; i++) expect(grab(s)).toBe(true);
+    expect(s.run.fightIndex).toBeGreaterThanOrEqual(1); // cleared at least clearing 0
+    while (s.stage !== 'fight') expect(grab(s)).toBe(true); // sit in clearing 1's fight
+
+    // clearing 0's moves are behind us: the per-clearing counter has reset but
+    // the run total still carries them
+    expect(totalMoves(s)).toBeGreaterThan(movesThisClearing(s));
   });
 
   it('rejects entries that do not fit the stage, leaving the log clean', () => {

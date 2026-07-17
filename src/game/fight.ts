@@ -174,6 +174,28 @@ export function resolveEnemyTurn(s: FightState) {
   s.turn++;
   markSprout(s);
   assignTelegraphs(s);
+  announceStuck(s);
+}
+
+/**
+ * A bramble piece the player has walled in — one that would move but has no
+ * legal square — re-announces its stuckness every turn it stays that way, so
+ * holding a thistle in place stays loud feedback and not a one-time note that
+ * scrolls away. The Heart is exempt (its own null telegraph already reads as
+ * "digging in"), and we don't double up on a piece resolveTelegraphs just
+ * reported blocked this same turn.
+ */
+function announceStuck(s: FightState) {
+  const already = new Set(
+    s.events.filter((e) => e.type === 'blocked').map((e) => `${e.at.x},${e.at.y}`),
+  );
+  for (const e of enemies(s)) {
+    if (e.kind === 'heart') continue;
+    if (already.has(`${e.x},${e.y}`)) continue;
+    if (movesFor(s, e).length === 0) {
+      s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
+    }
+  }
 }
 
 // ---------- the spread clock ----------

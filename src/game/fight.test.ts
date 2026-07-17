@@ -483,6 +483,28 @@ describe('fight loop', () => {
     expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'thistle')).toBe(true);
   });
 
+  it('a walled-in thistle re-announces its block every turn it stays stuck', () => {
+    const s = fight(
+      [
+        { kind: 'keeper', x: 5, y: 5 },
+        { kind: 'hopper', x: 2, y: 4 }, // sits directly in front — the thistle can't push or bite it
+      ],
+      [{ kind: 'thistle', x: 2, y: 3 }],
+    );
+    // stuck from the outset: no forward push, nothing on its diagonals to take
+    expect(s.telegraphs.some((t) => t.pieceId === idAt(s, 2, 3) && t.to)).toBe(false);
+
+    resolveEnemyTurn(s);
+    expect(s.pieces.find((p) => p.kind === 'thistle')).toMatchObject({ x: 2, y: 3 });
+    expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'thistle')).toBe(true);
+
+    // a second quiet turn and it's still walled in — the feedback fires again,
+    // not just the once
+    s.events = [];
+    resolveEnemyTurn(s);
+    expect(s.events.some((ev) => ev.type === 'blocked' && ev.kind === 'thistle')).toBe(true);
+  });
+
   it("interposing into a slider's lane costs you the piece — it takes the blocker, not a free block", () => {
     // creeper (diagonal slider) at (1,1) aims down-right at the sprout on (4,4)
     const s = fight(
