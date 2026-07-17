@@ -199,6 +199,26 @@ describe('fight loop', () => {
     expect(s.events.some((ev) => ev.type === 'cornered')).toBe(true);
   });
 
+  it('acknowledges mate the instant the checking move lands (no one-turn delay)', () => {
+    // the keeper at (1,2) already covers the heart's (0,1) and (1,1) escapes;
+    // sliding the rumble to (3,0) delivers the row-0 check AND seals (1,0) in
+    // the same move. That IS mate — it must register now, not next turn.
+    const s = fight(
+      [
+        { kind: 'keeper', x: 1, y: 2 },
+        { kind: 'rumble', x: 3, y: 2 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      4,
+      4,
+    );
+    expect(s.status).toBe('playing'); // not mate until the rumble arrives
+    expect(playerMove(s, idAt(s, 3, 2), { x: 3, y: 0 })).toBe(true);
+    expect(s.status).toBe('won');
+    expect(s.events.some((ev) => ev.type === 'cornered')).toBe(true);
+  });
+
   it('not cornered while a bramble piece can capture the checker', () => {
     // rumble at (0,3) checks down column 0; rumble at (1,3) seals column 1.
     // Old rule: cornered. But the bramble creeper at (3,0) can take the
@@ -630,6 +650,47 @@ describe('fight loop', () => {
     expect(s.status).toBe('playing');
   });
 
+  it('the Heart bites a piece that steps into range instead of executing its stale quiet drift', () => {
+    // nothing to bite at telegraph time, so the heart commits to a quiet drift
+    // toward the keeper — (1,0) is closest and wins on distance alone
+    const s = fight(
+      [
+        { kind: 'keeper', x: 5, y: 0 },
+        { kind: 'hopper', x: 3, y: 0 },
+      ],
+      [{ kind: 'heart', x: 0, y: 0 }],
+      1,
+      6,
+      6,
+    );
+    const heartId = idAt(s, 0, 0);
+    expect(s.telegraphs.find((t) => t.pieceId === heartId)!.to).toEqual({ x: 1, y: 0 });
+    // the hopper leaps onto (1,1) — heart-adjacent, but not the square it planned for
+    expect(playerMove(s, idAt(s, 3, 0), { x: 1, y: 1 })).toBe(true);
+    resolveEnemyTurn(s);
+    expect(s.pieces.find((p) => p.kind === 'hopper')).toBeUndefined(); // bitten, not spared
+    expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 1, y: 1 });
+  });
+
+  it('a leaper that telegraphed a quiet move still bites a piece that steps into its other leap square', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 1, y: 1 }],
+      [{ kind: 'tumbleweed', x: 0, y: 0 }],
+      1,
+      6,
+      6,
+    );
+    const tw = idAt(s, 0, 0);
+    // the only two squares a leaper at (0,0) reaches; nothing to bite yet, so it
+    // commits to whichever scores better as a quiet drift
+    const telegraphed = s.telegraphs.find((t) => t.pieceId === tw)!.to!;
+    const other =
+      telegraphed.x === 1 && telegraphed.y === 2 ? { x: 2, y: 1 } : { x: 1, y: 2 };
+    expect(playerMove(s, idAt(s, 1, 1), other)).toBe(true);
+    resolveEnemyTurn(s);
+    expect(s.status).toBe('lost'); // it bit the keeper instead of leaving for its stale aim
+  });
+
   it('capturing a telegraphed enemy is a stolen turn — a tempo event fires', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'hopper', x: 2, y: 3 }],
@@ -770,7 +831,9 @@ describe('fickle and shrouded telegraphs', () => {
  * cost something, without putting a hard timer on anyone.
  */
 describe('the bramble spreads', () => {
-  const CLOCK = { spread: { after: 2, every: 2, cap: 5 } };
+  // startAt: 1 opts these mechanics tests out of the material gate (which has
+  // its own test below) — they're about the clock, cap, and smothering.
+  const CLOCK = { spread: { after: 2, every: 2, cap: 5, startAt: 1 } };
 
   it('marks a square with fair warning, then sprouts a thistle there', () => {
     const s = fight(
@@ -829,7 +892,7 @@ describe('the bramble spreads', () => {
       1,
       6,
       6,
-      { spread: { after: 2, every: 2, cap: 2 } },
+      { spread: { after: 2, every: 2, cap: 2, startAt: 1 } },
     );
     resolveEnemyTurn(s);
     resolveEnemyTurn(s);
@@ -844,6 +907,30 @@ describe('the bramble spreads', () => {
     for (let i = 0; i < 20 && s.status === 'playing'; i++) resolveEnemyTurn(s);
     expect(s.pieces.filter((p) => p.side === 'bramble').length).toBeLessThanOrEqual(1);
     expect(s.pendingSprout).toBeNull();
+  });
+
+  it('holds reinforcements until the bramble is thinned below the material gate', () => {
+    // two hoppers = 60 opening material; the default 0.6 gate arms at 36
+    const s = fight(
+      [{ kind: 'keeper', x: 4, y: 7 }],
+      [
+        { kind: 'hopper', x: 7, y: 0 },
+        { kind: 'hopper', x: 0, y: 0 },
+      ],
+      1,
+      8,
+      8,
+      { spread: { after: 2, every: 1, cap: 6 } }, // default gate
+    );
+    expect(s.startMaterial).toBe(60);
+    resolveEnemyTurn(s); // turn 2 = after: the clock ticks, but full strength holds it
+    expect(s.pendingSprout).toBeNull();
+    // the player picks one off — now the bramble is under the gate
+    const victim = s.pieces.find((p) => p.kind === 'hopper')!;
+    s.pieces = s.pieces.filter((p) => p.id !== victim.id);
+    resolveEnemyTurn(s); // turn 3: thinned to 30 < 36, reinforcements arm
+    expect(s.pendingSprout).not.toBeNull();
+    expect(s.events.some((ev) => ev.type === 'stir')).toBe(true);
   });
 
   it('a sprouted thistle gets a fresh id nothing else wears', () => {

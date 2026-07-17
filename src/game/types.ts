@@ -90,11 +90,19 @@ export interface FightEvent {
  * The spread clock: linger past `after` turns and a thistle reinforcement
  * sprouts at the far edge every `every` turns (never past `cap` bramble
  * pieces). The anti-stall valve — camping a dead position stops being free.
+ *
+ * `startAt` gates it on progress, not just the clock: reinforcements stay
+ * dormant until the bramble side has been thinned to this fraction of its
+ * opening material. Beginners who take a while to line up their first captures
+ * shouldn't get piled on while the clearing is still at full strength — the
+ * spread is meant to punish camping a *winning* position, not a slow start.
  */
 export interface SpreadConfig {
   after: number;
   every: number;
   cap: number;
+  /** fraction (0..1) of opening bramble material to fall below first; default DEFAULT_SPREAD_GATE */
+  startAt?: number;
 }
 
 export interface FightState {
@@ -109,6 +117,8 @@ export interface FightState {
   spread?: SpreadConfig;
   /** where the next reinforcement will sprout (telegraphed one turn ahead) */
   pendingSprout: Vec | null;
+  /** bramble material at the opening bell — the yardstick the spread gate reads */
+  startMaterial: number;
   /** next fresh piece id (reinforcements need ids nothing else wears) */
   nextId: number;
   turn: number;

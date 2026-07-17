@@ -1164,6 +1164,7 @@ function showDevPanel() {
         devRow({ label: 'after turn', get: () => c.after, set: (v) => (c.after = Math.round(v)), step: 1 }),
         devRow({ label: 'every', get: () => c.every, set: (v) => (c.every = Math.max(1, Math.round(v))), step: 1 }),
         devRow({ label: 'cap', get: () => c.cap, set: (v) => (c.cap = Math.round(v)), step: 1 }),
+        devRow({ label: 'gate (mat %)', get: () => c.startAt ?? 0.6, set: (v) => (c.startAt = Math.max(0, Math.min(1, v))), step: 0.1 }),
       );
     }
     clock.append(

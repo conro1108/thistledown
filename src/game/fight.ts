@@ -1,4 +1,4 @@
-import { inBounds, isPawn, movesFor, pieceAt, threatsFor } from './board';
+import { inBounds, isPawn, isSlider, movesFor, pieceAt, threatsFor } from './board';
 import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Telegraph, Vec } from './types';
 
 export interface Spawn {
@@ -13,6 +13,9 @@ export interface Spawn {
 }
 
 export const NAIVE_DIALS: AiDials = { foresight: 0, caution: 0, bloodlust: 1, temperature: 0.5 };
+
+/** Spread stays dormant until the bramble is thinned to this share of its opening. */
+export const DEFAULT_SPREAD_GATE = 0.6;
 
 /** Chess piece values in disguise — the exchange math the dials reason with. */
 export const PIECE_VALUE: Record<Kind, number> = {
@@ -63,6 +66,7 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     dials: { ...NAIVE_DIALS, ...cfg.dials },
     spread: cfg.spread,
     pendingSprout: null,
+    startMaterial: pieces.reduce((m, p) => m + (p.side === 'bramble' ? PIECE_VALUE[p.kind] : 0), 0),
     nextId: id,
     turn: 1,
     status: 'playing',
@@ -80,6 +84,11 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
 
 export function enemies(s: FightState): Piece[] {
   return s.pieces.filter((p) => p.side === 'bramble');
+}
+
+/** Current bramble material — the spread gate compares this against startMaterial. */
+export function brambleMaterial(s: FightState): number {
+  return enemies(s).reduce((m, p) => m + PIECE_VALUE[p.kind], 0);
 }
 
 export function keeper(s: FightState): Piece | undefined {
@@ -222,6 +231,10 @@ function markSprout(s: FightState) {
   const c = s.spread;
   if (!c || s.turn < c.after || (s.turn - c.after) % c.every !== 0) return;
   if (enemies(s).length >= c.cap) return;
+  // hold reinforcements until the player has actually thinned the clearing —
+  // a full-strength bramble spreading on a beginner is pure pile-on
+  const gate = c.startAt ?? DEFAULT_SPREAD_GATE;
+  if (brambleMaterial(s) > gate * s.startMaterial) return;
   const free: Vec[] = [];
   for (let x = 0; x < s.w; x++) if (!pieceAt(s, x, 0)) free.push({ x, y: 0 });
   if (!free.length) return;
@@ -454,10 +467,17 @@ function resolveHeart(s: FightState, h: Piece, t: Telegraph) {
  * the lane to dodge — you can't escape a lane by staying on it, and it reaches a
  * far one no stepper could. The first own-side piece (or the board edge) ends
  * the lane. With no friend to catch, it lands on the telegraphed square if that
- * move is still legal. Steppers and leapers resolve only the exact aimed square
- * here — but a *red* attack tracks its target across squares one level up, in
- * chaseTarget: this is only the square-by-square fallback when there's no live
- * target to chase (a quiet move, or a target that dodged clear of reach).
+ * move is still legal.
+ *
+ * Steppers and leapers (including the Heart) have no lane to chase along, but
+ * a stale quiet aim still shouldn't blind them to a bite that opened up
+ * elsewhere in reach — a piece that carelessly steps next to a "quiet" mover
+ * gets taken, not spared because it wasn't the square that was planned for.
+ * Prefer the aimed square if it's a bite, else the juiciest bite available
+ * now, else the aim (a genuinely quiet move). A *red* attack tracks its
+ * target across squares one level up, in chaseTarget — this is only the
+ * fallback for when there's no live target to chase (a quiet move, or a
+ * target that dodged clear of reach).
  *
  * A pawn aiming a diagonal capture has no lane to chase along — if the target
  * stepped away, it pushes forward instead of standing idle (that's a dodge,
@@ -482,11 +502,20 @@ function landingFor(s: FightState, e: Piece, aim: Vec): Vec | null {
     if (aim.x === e.x) return aimHit; // forward push: its square, or null if walled off head-on
     return legal.find((m) => m.x === e.x) ?? null; // aimed diagonal emptied out: push forward
   }
+
+  if (!isSlider(e.kind)) {
+    const bites = legal.filter((m) => pieceAt(s, m.x, m.y));
+    if (bites.length) {
+      return (
+        bites.find((m) => m.x === aim.x && m.y === aim.y) ??
+        bites.reduce((a, b) => (prize(s, b) > prize(s, a) ? b : a))
+      );
+    }
+    return aimHit;
+  }
+
   const dx = Math.sign(aim.x - e.x);
   const dy = Math.sign(aim.y - e.y);
-  const straight = dx === 0 || dy === 0 || Math.abs(aim.x - e.x) === Math.abs(aim.y - e.y);
-  if (!straight) return aimHit; // leapers have no lane to walk
-
   let x = e.x + dx;
   let y = e.y + dy;
   while (inBounds(s, x, y)) {

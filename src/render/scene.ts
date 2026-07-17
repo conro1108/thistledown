@@ -1,4 +1,4 @@
-import { isPawn, movesFor, pieceAt, threatsFor } from '../game/board';
+import { isPawn, isSlider, movesFor, pieceAt, threatsFor } from '../game/board';
 import type { FightState, Telegraph, Vec } from '../game/types';
 import { drawSprite } from './sprites';
 
@@ -60,6 +60,17 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     const from = v.posOverrides?.get(e.id) ?? e;
     const aims = t.alt ? [t.to, t.alt] : [t.to];
     for (const aim of aims) {
+      // A slider takes the first friend anywhere along its committed ray — even
+      // past the aimed square — so draw the whole lane, not a stub to one cell.
+      // The lane's end is where the threat really stops: the friend it bites, or
+      // the last square before an own-plant / the board edge.
+      if (isSlider(e.kind)) {
+        const lane = sliderLane(s, from, aim);
+        const col = lane.bite ? '#e05252' : '#7a5fae';
+        arrow(ctx, from, lane.end, col);
+        corners(ctx, lane.end.x, lane.end.y, col);
+        continue;
+      }
       const occ = pieceAt(s, aim.x, aim.y);
       const targetsFriend =
         occ?.side === 'friend' && threatsFor(s, e).some((q) => q.x === aim.x && q.y === aim.y);
@@ -147,6 +158,37 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       ctx.fillRect(px, py, 1, 1);
     }
   }
+}
+
+/**
+ * How far a slider's committed ray actually reaches, mirroring landingFor: it
+ * walks from the mover along the aimed direction and stops at the first friend
+ * it would bite (that square is the end), or at the last empty square before an
+ * own-plant / the board edge. `bite` is set when a friend sits on the lane.
+ */
+function sliderLane(s: FightState, from: Vec, to: Vec): { end: Vec; bite: Vec | null } {
+  const fx = Math.round(from.x);
+  const fy = Math.round(from.y);
+  const dx = Math.sign(to.x - fx);
+  const dy = Math.sign(to.y - fy);
+  let end: Vec = { x: fx, y: fy };
+  let bite: Vec | null = null;
+  let x = fx + dx;
+  let y = fy + dy;
+  while (x >= 0 && y >= 0 && x < s.w && y < s.h) {
+    const occ = pieceAt(s, x, y);
+    if (occ) {
+      if (occ.side === 'friend') {
+        bite = { x, y };
+        end = { x, y };
+      }
+      break; // own-plant or a friend: the lane ends here either way
+    }
+    end = { x, y };
+    x += dx;
+    y += dy;
+  }
+  return { end, bite };
 }
 
 function corners(ctx: CanvasRenderingContext2D, x: number, y: number, col: string) {
