@@ -283,6 +283,9 @@ canvas {
   border: 1.5px solid var(--edge);
   border-radius: 6px;
 }
+.dev-diff { flex: 1 1 100%; }
+.dev-diff span { flex: 0 0 118px; }
+.dev-diff input[type='range'] { flex: 1 1 auto; width: auto; padding: 0; border: none; background: none; }
 .dev-dump {
   margin: 12px 0 0;
   padding: 8px;

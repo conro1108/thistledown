@@ -20,6 +20,13 @@ export interface RunState {
   companions: Companion[];
   trinkets: TrinketId[];
   status: 'playing' | 'won' | 'lost';
+  /**
+   * Dev-only master difficulty knob: one number that scales every clearing's
+   * authored bramble smarts instead of hand-tuning dials fight by fight. 1 (or
+   * undefined) plays the ladder as authored; 0 makes the whole run naive; 2
+   * maxes it out. Set from the dev panel; a set value marks the session dirty.
+   */
+  difficulty?: number;
 }
 
 export const ROSTER_CAP = 6;
@@ -402,6 +409,23 @@ export function generateFights(seed: number): FightSpec[] {
   });
 }
 
+/**
+ * Bend a clearing's authored dials by the run's master difficulty. Only the two
+ * "how sharply it plays" dials (foresight, caution) scale — bloodlust and
+ * temperature aren't per-fight difficulty knobs, so they pass through. `factor`
+ * of 1 is a no-op; 0 flattens smarts to naive; >1 sharpens, clamped to 1.
+ */
+export function scaleDials(
+  dials: Partial<AiDials> | undefined,
+  factor: number,
+): Partial<AiDials> | undefined {
+  if (factor === 1 || dials === undefined) return dials;
+  const out: Partial<AiDials> = { ...dials };
+  if (out.foresight !== undefined) out.foresight = Math.min(1, out.foresight * factor);
+  if (out.caution !== undefined) out.caution = Math.min(1, out.caution * factor);
+  return out;
+}
+
 const NAMES = [
   'Pickle',
   'Clover',
@@ -612,7 +636,7 @@ export function buildFightConfig(run: RunState): BuiltFight {
       friends,
       enemies: placeEnemies(spec, run.rng, friends),
       actsPerTurn: spec.acts,
-      dials: spec.dials,
+      dials: scaleDials(spec.dials, run.difficulty ?? 1),
       spread: spec.spread,
       cloak: run.trinkets.includes('cloak'),
       secondBreakfast: run.trinkets.includes('breakfast'),

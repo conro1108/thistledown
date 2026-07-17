@@ -14,6 +14,7 @@ import {
   recruit,
   REGION_NAMES,
   regionOf,
+  scaleDials,
   takeTrinket,
 } from './run';
 import type { FightState, Piece } from './types';
@@ -155,6 +156,33 @@ describe('run', () => {
     const next = buildFightConfig(run).cfg;
     expect(next.cloak).toBe(true);
     expect(next.secondBreakfast).toBe(true);
+  });
+
+  it('the master difficulty knob scales a clearing’s bramble smarts', () => {
+    // scaleDials in isolation: only foresight/caution bend, and they clamp to 1
+    expect(scaleDials({ foresight: 0.4, caution: 0.5 }, 1)).toEqual({ foresight: 0.4, caution: 0.5 });
+    expect(scaleDials({ foresight: 0.4, caution: 0.5 }, 0)).toEqual({ foresight: 0, caution: 0 });
+    expect(scaleDials({ foresight: 0.4, caution: 0.5 }, 2)).toEqual({ foresight: 0.8, caution: 1 });
+    // bloodlust/temperature are not difficulty knobs — they pass through untouched
+    expect(scaleDials({ foresight: 0.5, bloodlust: 2, temperature: 0.3 }, 0)).toEqual({
+      foresight: 0,
+      bloodlust: 2,
+      temperature: 0.3,
+    });
+    expect(scaleDials(undefined, 3)).toBeUndefined();
+
+    // and it rides through buildFightConfig onto the actual clearing dials
+    const authored = newRun(5);
+    authored.fightIndex = 15; // the final heart: authored foresight/caution of 1
+    const base = buildFightConfig(authored).cfg.dials!;
+    expect(base.foresight).toBe(1);
+
+    const easy = newRun(5);
+    easy.fightIndex = 15;
+    easy.difficulty = 0;
+    const flat = buildFightConfig(easy).cfg.dials!;
+    expect(flat.foresight).toBe(0);
+    expect(flat.caution).toBe(0);
   });
 
   it('winning the last fight wins the run', () => {

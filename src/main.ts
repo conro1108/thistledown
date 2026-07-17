@@ -1,7 +1,7 @@
 import './style.css';
 import { isPawn, movesFor, pieceAt } from './game/board';
-import { enemies, type PromotionKind } from './game/fight';
-import { KIND_INFO, REGION_NAMES, regionOf, TRINKETS, type RunState } from './game/run';
+import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
+import { KIND_INFO, REGION_NAMES, regionOf, scaleDials, TRINKETS, type RunState } from './game/run';
 import { apply, newSession, replay, retryFight, type LogEntry, type Session } from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
@@ -1007,6 +1007,42 @@ function showDevPanel() {
     ? '⚠ hand-tuned session: saving and look-back are off until a new run'
     : 'tuning anything turns off saving and look-back for this session';
   body.append(note);
+
+  // High-level difficulty: one slider that bends every clearing's authored
+  // bramble smarts, so you can feel out a play style without touching the
+  // per-fight dials below (those still work for one-off tuning).
+  const diffBox = devSection(body, 'master difficulty (scales every clearing’s smarts)');
+  const diffRow = document.createElement('label');
+  diffRow.className = 'dev-row dev-diff';
+  const diffLabel = document.createElement('span');
+  const diffSlider = document.createElement('input');
+  diffSlider.type = 'range';
+  diffSlider.min = '0';
+  diffSlider.max = '2';
+  diffSlider.step = '0.1';
+  const readout = () => {
+    const v = run!.difficulty ?? 1;
+    diffLabel.textContent =
+      v === 0 ? 'naive (0.0×)' : v < 1 ? `easier (${v.toFixed(1)}×)` : v === 1 ? 'as authored (1.0×)' : `sharper (${v.toFixed(1)}×)`;
+    diffSlider.value = String(v);
+  };
+  readout();
+  diffSlider.oninput = () => {
+    const v = parseFloat(diffSlider.value);
+    if (Number.isNaN(v)) return;
+    markDevDirty();
+    run!.difficulty = v;
+    // reflect it on the live fight right away by re-deriving from this
+    // clearing's authored dials; future clearings pick it up when they build
+    if (fight && fight.status === 'playing') {
+      const spec = run!.fights[run!.fightIndex];
+      fight.dials = { ...NAIVE_DIALS, ...scaleDials(spec.dials, v) };
+    }
+    readout();
+    refreshHud();
+  };
+  diffRow.append(diffLabel, diffSlider);
+  diffBox.append(diffRow);
 
   if (fight && fight.status === 'playing') {
     const f = fight;
