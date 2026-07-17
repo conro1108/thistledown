@@ -1,16 +1,17 @@
 ---
-name: verify-full
-description: Build, launch, and drive Overgrown in a real browser to verify visual/rendering/interaction changes end-to-end. Expensive — use only for changes that need to be seen, or when asked.
+name: verify-heavy
+description: Build, launch, and drive Overgrown in a real browser to verify visual/rendering/interaction changes end-to-end. Only for large UI changes — expensive (screenshots burn a lot of tokens), do not invoke for routine work; `npm run build && npm test` covers everything else.
 ---
 
-# Verifying Overgrown (full, browser-driven)
+# Verifying Overgrown (heavy, browser-driven)
 
-Use this only when a change touches rendering/visuals (canvas scene, sprites,
-telegraph arrows, animations), layout/sizing, or turn-timing/feel — and the
-light `verify` skill (typecheck + unit tests) isn't enough to trust it. This
-drives a real browser and reads back screenshots, which is significantly more
-expensive — don't reach for it by default, and don't run it for every small
-tweak during active playtesting.
+Only invoke this for large UI changes — rendering/visuals (canvas scene,
+sprites, telegraph arrows, animations), layout/sizing, or turn-timing/feel
+where a typecheck and unit tests genuinely can't catch what's wrong. For
+everything else, `npm run build` (typecheck + Vite build) and `npm test`
+(Vitest) are enough. This drives a real browser and reads back screenshots,
+which is significantly more expensive — don't reach for it by default, and
+don't run it for every small tweak during active playtesting.
 
 1. `npx vite --port 5173` (background). App at http://localhost:5173/.
 2. Drive with `playwright-core` (already a devDependency — no browser
