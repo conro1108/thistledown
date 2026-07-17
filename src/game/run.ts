@@ -543,15 +543,19 @@ function friendCoverAtSpawn(w: number, h: number, friends: Spawn[]): Set<string>
  * player with an identical picture every time. The Bramble Heart never
  * spawns already in check — a long-range friend (rumble/duchess/slink)
  * happening to share its file/rank/diagonal shouldn't hand the boss fight
- * away, or start it, before the player has made a single move.
+ * away, or start it, before the player has made a single move. Anything
+ * worth more than a thistle gets the same courtesy: a free snipe the moment
+ * a slider gets recruited would make that recruit feel like a fight-skip
+ * instead of a tool, so cost >= 3 bramble avoids the opening threat picture
+ * too — just a nibble-able thistle or two on turn one, not a heavy piece.
  */
 function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
   const zoneRows = Math.max(2, Math.floor(spec.h / 2) - 1);
-  const heartCover = spec.enemies.some((e) => e.kind === 'heart')
-    ? friendCoverAtSpawn(spec.w, spec.h, friends)
-    : null;
+  const anyProtected = spec.enemies.some((e) => e.kind === 'heart' || (COST[e.kind] ?? 0) >= 3);
+  const cover = anyProtected ? friendCoverAtSpawn(spec.w, spec.h, friends) : null;
   const taken = new Set<string>();
   return spec.enemies.map((es) => {
+    const protect = es.kind === 'heart' || (COST[es.kind] ?? 0) >= 3;
     let x = 0;
     let y = 0;
     let key = '';
@@ -561,7 +565,7 @@ function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
       x = Math.floor(rng() * spec.w);
       y = Math.floor(rng() * zoneRows);
       key = `${x},${y}`;
-      bad = taken.has(key) || (es.kind === 'heart' && heartCover!.has(key));
+      bad = taken.has(key) || (protect && cover!.has(key));
       tries++;
     } while (bad && tries < 200); // give up steering clear rather than hang — a clash of constraints beats an infinite loop
     taken.add(key);

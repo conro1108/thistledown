@@ -56,6 +56,29 @@ describe('run', () => {
     }
   });
 
+  it('higher-value bramble never spawns already capturable — a recruited slider shouldn’t get a free snipe on turn one', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const run = newRun(seed);
+      // stack long-range friends into the lineup so a shared file/rank/diagonal
+      // with a rolled square is plausible, not a coincidence we'd rarely hit
+      run.companions.push({ kind: 'rumble', name: 'a', shaken: false });
+      run.companions.push({ kind: 'duchess', name: 'b', shaken: false });
+      run.companions.push({ kind: 'slink', name: 'c', shaken: false });
+      for (let i = 0; i < run.fights.length; i++) {
+        run.fightIndex = i;
+        const { cfg } = buildFightConfig(run);
+        const pieces: Piece[] = cfg.friends.map((sp, idx) => ({ id: idx, side: 'friend', ...sp }));
+        const view = { w: cfg.w, h: cfg.h, pieces } as FightState;
+        const covered = new Set<string>();
+        for (const p of pieces) for (const t of threatsFor(view, p)) covered.add(`${t.x},${t.y}`);
+        for (const e of cfg.enemies) {
+          if (e.kind === 'thistle') continue; // a nibble-able pawn on turn one is fine
+          expect(covered.has(`${e.x},${e.y}`)).toBe(false);
+        }
+      }
+    }
+  });
+
   it('two Slinks in the roster land on different-colored squares, not stacked on one color', () => {
     for (let seed = 0; seed < 20; seed++) {
       const run = newRun(seed);
