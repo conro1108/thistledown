@@ -1095,6 +1095,9 @@ function showDevPanel() {
   overlayEl.querySelector<HTMLButtonElement>('.close')!.onclick = () => {
     overlayEl.classList.add('hidden');
     refreshHud();
+    // the dev panel can clobber a mandatory choice scene (trinket/camp/promotion)
+    // that was showing underneath it — restore whatever the stage actually calls for
+    if (sess && sess.stage !== 'fight') stageUi();
   };
 
   const note = document.createElement('p');
