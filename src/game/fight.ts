@@ -371,7 +371,8 @@ function prize(s: FightState, v: Vec | null): number {
 function land(s: FightState, e: Piece, to: Vec) {
   const occ = pieceAt(s, to.x, to.y);
   if (occ && occ.side === 'friend') {
-    const spot = s.cloakLeft > 0 ? cloakSpot(s, to) : null;
+    // the Cloak spares a companion, never the Keeper — losing the Keeper always ends the fight
+    const spot = occ.kind !== 'keeper' && s.cloakLeft > 0 ? cloakSpot(s, to) : null;
     if (spot) {
       // Dandelion Cloak: the friend drifts home instead of being caught
       s.cloakLeft--;

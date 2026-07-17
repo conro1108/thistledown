@@ -466,7 +466,7 @@ export const TRINKETS: Record<TrinketId, { title: string; icon: string; blurb: s
   cloak: {
     title: 'Dandelion Cloak',
     icon: '🧣',
-    blurb: 'Once each clearing, a caught friend drifts safely back to your home row instead.',
+    blurb: 'Once each clearing, a caught friend (never the Keeper) drifts safely back to your home row instead.',
   },
   whistle: {
     title: 'Acorn Whistle',

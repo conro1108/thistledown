@@ -74,7 +74,7 @@ describe('fight loop', () => {
     expect(s.pieces.find((p) => p.kind === 'thistle')).toMatchObject({ x: 4, y: 4 });
   });
 
-  it('Dandelion Cloak saves the keeper from a run-ending capture — once', () => {
+  it('Dandelion Cloak never saves the keeper — losing him still ends the fight', () => {
     const s = fight(
       [{ kind: 'keeper', x: 4, y: 4 }, { kind: 'sprout', x: 0, y: 4 }],
       [{ kind: 'thistle', x: 3, y: 3 }],
@@ -86,8 +86,8 @@ describe('fight loop', () => {
     expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 });
     playerMove(s, idAt(s, 0, 4), { x: 0, y: 3 });
     resolveEnemyTurn(s);
-    expect(s.status).toBe('playing');
-    expect(s.pieces.find((p) => p.kind === 'keeper')!.y).toBe(5);
+    expect(s.status).toBe('lost');
+    expect(s.cloakLeft).toBe(1); // untouched — the charge is still there for a companion
   });
 
   it('Second Breakfast: takeFreeMove grants exactly one extra move', () => {
