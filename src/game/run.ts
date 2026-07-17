@@ -568,16 +568,28 @@ function placeEnemies(spec: FightSpec, rng: Rng, friends: Spawn[]): Spawn[] {
 export function buildFightConfig(run: RunState): BuiltFight {
   const spec = run.fights[run.fightIndex];
   const cx = Math.floor(spec.w / 2);
+  const y = spec.h - 2;
   const friends: Spawn[] = [{ kind: 'keeper', x: cx, y: spec.h - 1 }];
   const lineup: number[] = [];
-  const offsets = [0, -1, 1, -2, 2, -3, 3];
-  let slot = 0;
+  // remaining fan-out slots, nearest-to-keeper first
+  const remaining = [0, -1, 1, -2, 2, -3, 3];
+  // a Slink only ever touches one square color, forever — two sharing a
+  // color is a wasted recruit, so steer them onto different ones when we can
+  const colorOf = (offset: number) => (cx + offset + y) % 2;
+  const slinkColors: number[] = [];
   run.companions.forEach((c, i) => {
-    if (c.shaken || slot >= offsets.length) return;
-    const x = cx + offsets[slot++];
+    if (c.shaken || remaining.length === 0) return;
+    let idx = 0;
+    if (c.kind === 'slink') {
+      const diverse = remaining.findIndex((o) => !slinkColors.includes(colorOf(o)));
+      if (diverse !== -1) idx = diverse;
+    }
+    const offset = remaining.splice(idx, 1)[0];
+    const x = cx + offset;
     if (x < 0 || x >= spec.w) return;
+    if (c.kind === 'slink') slinkColors.push(colorOf(offset));
     const whistled = run.trinkets.includes('whistle') && c.kind === 'hopper';
-    friends.push({ kind: c.kind, x, y: spec.h - 2, spry: c.spry || whistled || undefined });
+    friends.push({ kind: c.kind, x, y, spry: c.spry || whistled || undefined });
     lineup.push(i);
   });
   return {

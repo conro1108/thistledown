@@ -56,6 +56,19 @@ describe('run', () => {
     }
   });
 
+  it('two Slinks in the roster land on different-colored squares, not stacked on one color', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const run = newRun(seed);
+      run.companions.push({ kind: 'slink', name: 'a', shaken: false });
+      run.companions.push({ kind: 'slink', name: 'b', shaken: false });
+      const { cfg } = buildFightConfig(run);
+      const slinks = cfg.friends.filter((f) => f.kind === 'slink');
+      expect(slinks).toHaveLength(2);
+      const colors = slinks.map((s) => (s.x + s.y) % 2);
+      expect(colors[0]).not.toBe(colors[1]);
+    }
+  });
+
   it('shaken companions sit out, then recover', () => {
     const run = newRun(1);
     const { lineup } = buildFightConfig(run);
