@@ -16,13 +16,24 @@ html, body {
 }
 
 body {
-  background: radial-gradient(circle at 50% 0%, #221d33 0%, #171424 55%, #0e0c17 100%);
+  /* flat dusk — smooth gradients read as "clean app", not pixel meadow */
+  background: #0e0c17;
   color: var(--ink);
   font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Mono", "Courier New", monospace;
   overscroll-behavior: none;
 }
 
 button, input, textarea, select { font-family: inherit; }
+
+/* pixel-art UI icons (render/icons.ts): 12px base, p15/p2 at 18/24px */
+.picon {
+  width: 12px;
+  height: 12px;
+  image-rendering: pixelated;
+  vertical-align: -2px;
+}
+.picon.p15 { width: 18px; height: 18px; vertical-align: -4px; }
+.picon.p2 { width: 24px; height: 24px; vertical-align: -5px; }
 
 #app {
   display: flex;
@@ -65,9 +76,9 @@ button, input, textarea, select { font-family: inherit; }
 .trinket {
   font-size: 17px;
   line-height: 1.25;
-  padding: 2px 8px;
+  padding: 3px 8px 2px;
   border: 1.5px solid var(--edge);
-  border-radius: 8px;
+  border-radius: 3px;
   background: var(--panel-2);
   cursor: pointer;
 }
@@ -111,7 +122,7 @@ button, input, textarea, select { font-family: inherit; }
   gap: 6px;
   background: rgba(23, 20, 36, 0.92);
   border: 1.5px solid var(--edge);
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 5px 8px;
   z-index: 5;
   white-space: nowrap;
@@ -132,9 +143,9 @@ canvas {
 
 #board {
   border: 3px solid #4a3527;
-  border-radius: 4px;
   background: #87aa56;
-  box-shadow: 0 0 14px 3px rgba(0, 0, 0, 0.35);
+  /* hard offset shadow — soft glows don't live on a pixel grid */
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35);
 }
 
 /* ---------- status banner: the game talks to you here, in the thumb zone ---------- */
@@ -146,7 +157,7 @@ canvas {
   text-align: center;
   background: var(--panel-solid);
   border: 2px solid var(--edge);
-  border-radius: 10px;
+  border-radius: 4px;
   transition: border-color 0.15s, background 0.15s;
 }
 #status.player { border-color: rgba(255, 209, 102, 0.65); background: #322c1d; }
@@ -195,7 +206,7 @@ canvas {
   gap: 5px;
   background: var(--panel-2);
   border: 1.5px solid var(--edge);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 3px 8px 3px 5px;
   font-family: inherit;
   font-size: 10.5px;
@@ -203,13 +214,13 @@ canvas {
   cursor: pointer;
 }
 .chip canvas.mini {
-  width: 20px;
-  height: 20px;
+  width: 24px; /* 2× the 12px sprite — integer scale */
+  height: 24px;
   image-rendering: pixelated;
 }
 .chip.selected {
   border-color: var(--lantern);
-  box-shadow: 0 0 0 1.5px rgba(255, 209, 102, 0.35);
+  box-shadow: 0 0 0 1.5px rgba(255, 209, 102, 0.35), 0 3px 0 rgba(0, 0, 0, 0.4);
 }
 .chip:disabled {
   opacity: 0.4;
@@ -236,14 +247,14 @@ canvas {
 .card {
   background: var(--panel-solid);
   border: 2px solid var(--edge);
-  border-radius: 12px;
+  border-radius: 4px;
   padding: 22px;
   max-width: 440px;
   width: 100%;
   text-align: center;
   max-height: 90dvh;
   overflow-y: auto;
-  box-shadow: 0 0 24px 4px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.45);
 }
 .card h2 { margin: 0 0 10px; color: var(--lantern); }
 .card p { color: var(--ink); line-height: 1.5; }
@@ -281,7 +292,7 @@ canvas {
   background: var(--panel-2);
   color: var(--ink);
   border: 1.5px solid var(--edge);
-  border-radius: 6px;
+  border-radius: 3px;
 }
 .dev-diff { flex: 1 1 100%; }
 .dev-diff span { flex: 0 0 118px; }
@@ -293,7 +304,7 @@ canvas {
   line-height: 1.35;
   background: #14111f;
   border: 1.5px solid var(--edge);
-  border-radius: 8px;
+  border-radius: 3px;
   max-height: 180px;
   overflow: auto;
   white-space: pre-wrap;
@@ -302,9 +313,13 @@ canvas {
 .petal {
   position: absolute;
   top: -32px;
-  font-size: 20px;
   pointer-events: none;
   animation: petal-fall 4s linear infinite;
+}
+.petal .picon {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
 @keyframes petal-fall {
   0% { transform: translateY(0) rotate(0deg); opacity: 0; }
@@ -337,17 +352,19 @@ canvas {
   width: 40px;
   height: 40px;
   image-rendering: pixelated;
-  font-size: 30px;
-  line-height: 40px;
-  text-align: center;
+}
+.opt img.face {
+  width: 36px;
+  height: 36px;
+  margin: 2px;
 }
 .opt .name { font-size: 13px; font-weight: bold; color: var(--ink); }
 .opt .blurb { font-size: 11.5px; line-height: 1.35; color: var(--ink-soft); }
 /* the faint how-it-moves reminder, sat under the sprite */
 .opt canvas.movehint {
   grid-row: 1 / span 2;
-  width: 22px; /* 2× the 13px buffer — integer scale, always */
-  height: 22px;
+  width: 26px; /* 2× the 13px buffer — integer scale, always */
+  height: 26px;
   image-rendering: pixelated;
   opacity: 0.7;
   align-self: center;
@@ -370,10 +387,17 @@ button {
   background: var(--panel-2);
   color: var(--ink);
   border: 2px solid #544c70;
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 10px 14px;
   cursor: pointer;
   text-align: center;
+  /* chunky pixel press: depth up, squash down */
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+  transition: transform 0.05s, box-shadow 0.05s;
+}
+button:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 .btns button:hover { background: #3a3450; border-color: var(--lantern); }
 button small { display: block; color: var(--ink-soft); margin-top: 3px; }

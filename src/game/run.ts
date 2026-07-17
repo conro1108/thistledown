@@ -494,20 +494,17 @@ export function recruit(run: RunState, kind: Kind) {
 
 export type TrinketId = 'cloak' | 'whistle' | 'breakfast';
 
-export const TRINKETS: Record<TrinketId, { title: string; icon: string; blurb: string }> = {
+export const TRINKETS: Record<TrinketId, { title: string; blurb: string }> = {
   cloak: {
     title: 'Dandelion Cloak',
-    icon: '🧣',
     blurb: 'Once each clearing, a caught friend (never the Keeper) drifts safely back to your home row instead.',
   },
   whistle: {
     title: 'Acorn Whistle',
-    icon: '🌰',
     blurb: 'Every Hopper can also take a plain one-step move, any direction.',
   },
   breakfast: {
     title: 'Second Breakfast',
-    icon: '🥞',
     blurb: 'Once each clearing, your first move comes with a second helping — an extra move that can’t snatch anything.',
   },
 };

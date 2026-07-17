@@ -1,7 +1,7 @@
 import './style.css';
 import { isPawn, movesFor, pieceAt } from './game/board';
 import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
-import { KIND_INFO, REGION_NAMES, regionOf, scaleDials, TRINKETS, type RunState } from './game/run';
+import { KIND_INFO, REGION_NAMES, regionOf, scaleDials, TRINKETS, type RunState, type TrinketId } from './game/run';
 import {
   apply,
   movesThisClearing,
@@ -14,8 +14,16 @@ import {
 } from './game/session';
 import type { FightState, Kind, Telegraph, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
+import { iconEl, iconHTML, type IconName } from './render/icons';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
+
+/** Each trinket's pixel icon — a UI pairing, kept out of the pure game module. */
+const TRINKET_ICONS: Record<TrinketId, IconName> = {
+  cloak: 'cloak',
+  whistle: 'acorn',
+  breakfast: 'pancakes',
+};
 
 const OBJECTIVE = 'Catch every bramble creature to win the clearing.';
 const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing square to move them.';
@@ -31,7 +39,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
     <span id="fightname">Overgrown</span>
-    <span id="hud-right"><button id="dev-btn" class="trinket" title="Dev">🔧</button><button id="history-btn" class="trinket hidden" title="Look back">⏪</button><span id="trinkets"></span></span>
+    <span id="hud-right"><button id="dev-btn" class="trinket" title="Dev">${iconHTML('wrench', 'p15')}</button><button id="history-btn" class="trinket hidden" title="Look back">${iconHTML('rewind', 'p15')}</button><span id="trinkets"></span></span>
   </header>
   <div id="board-area">
     <canvas id="backdrop" width="1" height="1"></canvas>
@@ -220,8 +228,8 @@ function showOverlay(title: string, body: string, choices: Choice[]) {
 interface SceneOption {
   /** the card's face: a critter sprite… */
   kind?: Kind;
-  /** …or an emoji (trinkets, campfire comforts) */
-  icon?: string;
+  /** …or a pixel icon (trinkets, campfire comforts) */
+  icon?: IconName;
   label: string;
   detail: string;
   fn: () => void;
@@ -236,8 +244,9 @@ interface SceneOption {
 function showChoiceScene(title: string, body: string, options: SceneOption[]) {
   overlayEl.innerHTML = `<div class="card"><h2></h2><p class="scene-body"></p>
     <div class="opts"></div></div>`;
-  overlayEl.querySelector('h2')!.textContent = title;
-  overlayEl.querySelector('.scene-body')!.textContent = body;
+  // titles and bodies are app-authored strings that may carry inline icons
+  overlayEl.querySelector('h2')!.innerHTML = title;
+  overlayEl.querySelector('.scene-body')!.innerHTML = body;
   const optsEl = overlayEl.querySelector('.opts')!;
   for (const o of options) {
     const b = document.createElement('button');
@@ -250,10 +259,7 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
       drawSprite(cv.getContext('2d')!, o.kind, 0, 0);
       b.append(cv);
     } else {
-      const sp = document.createElement('span');
-      sp.className = 'face';
-      sp.textContent = o.icon ?? '❓';
-      b.append(sp);
+      b.append(iconEl(o.icon ?? 'question', 'face'));
     }
     const nm = document.createElement('span');
     nm.className = 'name';
@@ -362,9 +368,9 @@ function title() {
     fn: startRun,
   });
   const runBest = loadScores().run;
-  const bestNote = runBest !== undefined ? ` <span class="objective">🏆 Best run: ${plural(runBest, 'move')}</span>` : '';
+  const bestNote = runBest !== undefined ? ` <span class="objective">${iconHTML('trophy')} Best run: ${plural(runBest, 'move')}</span>` : '';
   showOverlay(
-    'Overgrown 🌼',
+    `Overgrown ${iconHTML('daisy', 'p2')}`,
     'The meadow is overgrown and the Keeper’s lantern is lit. Lead your friends, ' +
       'read the bramble’s intentions, and take the meadow back one clearing at a time.' +
       bestNote,
@@ -419,7 +425,7 @@ function fightIntro() {
   const spec = run.fights[run.fightIndex];
   showOverlay(
     `${REGION_NAMES[regionOf(run.fightIndex)]} · ${spec.name}`,
-    `${spec.intro}<span class="objective">🌼 ${spec.objective ?? OBJECTIVE}</span>`,
+    `${spec.intro}<span class="objective">${iconHTML('daisy')} ${spec.objective ?? OBJECTIVE}</span>`,
     [
       {
         label: 'Onward',
@@ -451,7 +457,7 @@ function enterFight(resume: boolean) {
   canvas.height = fight.h * TILE;
   document.querySelector('#board-wrap')!.classList.remove('idle');
   requestAnimationFrame(sizeCanvas);
-  hintEl.textContent = DEFAULT_HINT;
+  hintEl.innerHTML = DEFAULT_HINT;
   refreshHud();
   if (resume && sess.stage === 'promotion') {
     promotionChoice();
@@ -472,7 +478,7 @@ function maybeAutoWait() {
   if (!sess || !fight || fight.status !== 'playing' || phase !== 'player') return;
   if (sess.resolveDue || sess.stage !== 'fight') return;
   if (fight.pieces.some((p) => p.side === 'friend' && movesFor(fight!, p).length > 0)) return;
-  hintEl.textContent = 'Everyone is hemmed in — nowhere to step! Hold tight…';
+  hintEl.innerHTML = 'Everyone is hemmed in — nowhere to step! Hold tight…';
   setTimeout(beginEnemyTurn, 900);
 }
 
@@ -492,7 +498,7 @@ function endOfFightUi() {
   const moves = movesThisClearing(sess);
   const rec = recordClearing(fight?.name ?? 'this clearing', moves);
   const movesNote = rec.improved
-    ? ` Cleared in ${plural(moves, 'move')} — a new best! 🌟`
+    ? ` Cleared in ${plural(moves, 'move')} — a new best! ${iconHTML('sparkle')}`
     : rec.best !== undefined
       ? ` Cleared in ${plural(moves, 'move')} (best ${rec.best}).`
       : ` Cleared in ${plural(moves, 'move')}.`;
@@ -522,7 +528,7 @@ function endOfFightUi() {
       },
     })),
     {
-      icon: '🍃',
+      icon: 'leaf',
       label: 'Travel light',
       detail: 'No new friends this time — a smaller band moves quicker through the grass.',
       fn: () => {
@@ -554,12 +560,12 @@ function endOfRunUi() {
   const moves = sess ? totalMoves(sess) : 0;
   const rec = recordRun(moves);
   const runNote = rec.improved
-    ? ` And in just ${plural(moves, 'move')} — a new record! 🏆`
+    ? ` And in just ${plural(moves, 'move')} — a new record! ${iconHTML('trophy')}`
     : rec.best !== undefined
       ? ` You did it in ${plural(moves, 'move')} (best ${rec.best}).`
       : ` You did it in ${plural(moves, 'move')}.`;
   showOverlay(
-    'The meadow is quiet 🌼',
+    `The meadow is quiet ${iconHTML('daisy', 'p2')}`,
     'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
       `You won the whole thing — ${run.fights.length} clearings taken back, ` +
       `and ${friends + 1} of you walking home for tea.${runNote}`,
@@ -571,10 +577,10 @@ function endOfRunUi() {
 function trinketFound() {
   if (!sess) return;
   showChoiceScene(
-    'Something glints in the grass ✨',
+    `Something glints in the grass ${iconHTML('sparkle', 'p2')}`,
     'Half-buried by the path. It hums a little. You can only carry one more thing.',
     sess.trinketOffers.map((id) => ({
-      icon: TRINKETS[id].icon,
+      icon: TRINKET_ICONS[id],
       label: TRINKETS[id].title,
       detail: TRINKETS[id].blurb,
       fn: () => {
@@ -592,7 +598,7 @@ function campStop() {
   const choices: SceneOption[] = [];
   if (shaken.length) {
     choices.push({
-      icon: '🍲',
+      icon: 'stew',
       label: 'Warm mash',
       detail: `${listKinds(shaken)} perk${shaken.length > 1 ? '' : 's'} right up and rejoin${shaken.length > 1 ? '' : 's'} the band.`,
       fn: () => {
@@ -603,7 +609,7 @@ function campStop() {
   }
   if (snackable) {
     choices.push({
-      icon: '🍯',
+      icon: 'honey',
       label: 'Honeycake',
       detail: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
       fn: honeycakeChoice,
@@ -611,7 +617,7 @@ function campStop() {
   }
   for (const id of sess.trinketOffers) {
     choices.push({
-      icon: TRINKETS[id].icon,
+      icon: TRINKET_ICONS[id],
       label: TRINKETS[id].title,
       detail: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
       fn: () => {
@@ -621,7 +627,7 @@ function campStop() {
     });
   }
   choices.push({
-    icon: '🔥',
+    icon: 'fire',
     label: 'Rest quietly',
     detail: 'Just the crackle of the fire.',
     fn: () => {
@@ -639,7 +645,7 @@ function campStop() {
 function honeycakeChoice() {
   if (!run) return;
   showChoiceScene(
-    'Honeycake 🍯',
+    `Honeycake ${iconHTML('honey', 'p2')}`,
     'Who gets it? (No take-backs — it is a very good cake.)',
     run.companions
       .map((c, i) => ({ c, i }))
@@ -658,11 +664,11 @@ function honeycakeChoice() {
 
 /** Flower confetti over the current overlay. Purely ceremonial. */
 function rainPetals() {
-  const flowers = ['🌼', '🌸', '💮', '🌷'];
+  const flowers: IconName[] = ['daisy', 'blossom', 'bloom', 'tulip'];
   for (let i = 0; i < 28; i++) {
     const p = document.createElement('span');
     p.className = 'petal';
-    p.textContent = flowers[i % flowers.length];
+    p.append(iconEl(flowers[i % flowers.length]));
     p.style.left = `${(i * 37 + 11) % 100}%`;
     p.style.animationDelay = `${(i % 7) * 0.45}s`;
     p.style.animationDuration = `${3 + (i % 5) * 0.6}s`;
@@ -675,7 +681,7 @@ function promotionChoice() {
   // the Duchess only answers late in the run
   if (run && run.fightIndex >= 4) options.push('duchess');
   showChoiceScene(
-    'Something blossoms ✨',
+    `Something blossoms ${iconHTML('sparkle', 'p2')}`,
     'Crossing the whole meadow changes a critter. Who do they become?',
     options.map((kind) => ({
       kind,
@@ -695,9 +701,11 @@ function promotionChoice() {
 
 function phaseLabel(): string {
   if (!fight) return '';
-  if (fight.status === 'lost') return '💤 the lantern goes out';
-  if (fight.status === 'won') return '🌼 clearing won!';
-  return phase === 'enemy' ? '🌱 the bramble moves…' : `🌼 your move · turn ${fight.turn}`;
+  if (fight.status === 'lost') return `${iconHTML('zzz')} the lantern goes out`;
+  if (fight.status === 'won') return `${iconHTML('daisy')} clearing won!`;
+  return phase === 'enemy'
+    ? `${iconHTML('sprout')} the bramble moves…`
+    : `${iconHTML('daisy')} your move · turn ${fight.turn}`;
 }
 
 /** The short tail of the status line: what's left to do. */
@@ -705,15 +713,15 @@ function goalLabel(): string {
   if (!fight || fight.status !== 'playing') return '';
   const heart = fight.pieces.find((p) => p.kind === 'heart');
   const left = enemies(fight).length - (heart ? 1 : 0);
-  if (heart) return left ? `🌿 ${left} guard${left > 1 ? 's' : ''}` : 'corner the Heart!';
-  return `🌿 ${left} to catch`;
+  if (heart) return left ? `${iconHTML('fern')} ${left} guard${left > 1 ? 's' : ''}` : 'corner the Heart!';
+  return `${iconHTML('fern')} ${left} to catch`;
 }
 
 function refreshHud() {
   if (!run || !fight) return;
   hudName.textContent = `${fight.name} · ${run.fightIndex + 1}/${run.fights.length}`;
   const goal = goalLabel();
-  statusLineEl.textContent = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
+  statusLineEl.innerHTML = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
   statusEl.className = fight.status !== 'playing' ? fight.status : phase;
   historyBtn.classList.toggle(
     'hidden',
@@ -726,9 +734,9 @@ function refreshHud() {
     // a real button: title= tooltips don't exist on a phone
     const t = document.createElement('button');
     t.className = 'trinket';
-    t.textContent = TRINKETS[id].icon;
+    t.append(iconEl(TRINKET_ICONS[id], 'p15'));
     t.onclick = () =>
-      showOverlay(`${TRINKETS[id].icon} ${TRINKETS[id].title}`, TRINKETS[id].blurb, [
+      showOverlay(`${iconHTML(TRINKET_ICONS[id], 'p2')} ${TRINKETS[id].title}`, TRINKETS[id].blurb, [
         { label: 'Onward', fn: () => {} },
       ]);
     trinketsEl.append(t);
@@ -745,14 +753,14 @@ function renderRoster() {
     const pieceId = companionPieceId.get(i);
     const alive = pieceId != null && fight.pieces.some((p) => p.id === pieceId);
     rosterEl.append(
-      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? '💤' : c.spry ? '🍯' : undefined),
+      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? 'zzz' : c.spry ? 'honey' : undefined),
     );
   }
 }
 
 /** A small chip: sprite + critter type. Board taps are the main way to select;
  * these are just a legible "who's in the band" strip that happens to be tappable. */
-function rosterButton(kind: Kind, pieceId: number, disabled: boolean, badge?: string): HTMLButtonElement {
+function rosterButton(kind: Kind, pieceId: number, disabled: boolean, badge?: IconName): HTMLButtonElement {
   const b = document.createElement('button');
   b.className = 'chip' + (selected === pieceId ? ' selected' : '');
   b.disabled = disabled || phase !== 'player' || !fight || fight.status !== 'playing';
@@ -764,8 +772,9 @@ function rosterButton(kind: Kind, pieceId: number, disabled: boolean, badge?: st
   b.append(mini);
   const label = document.createElement('span');
   const title = kind === 'keeper' ? 'Keeper' : KIND_INFO[kind].title;
-  label.textContent = badge ? `${title} ${badge}` : title;
+  label.textContent = title;
   b.append(label);
+  if (badge) b.append(iconEl(badge));
   b.onclick = () => selectPiece(pieceId);
   return b;
 }
@@ -792,7 +801,7 @@ function selectPiece(pieceId: number) {
   if (!p) return;
   inspect = { x: p.x, y: p.y };
   selected = p.side === 'friend' ? p.id : null;
-  hintEl.textContent = describeInFight(p);
+  hintEl.innerHTML = describeInFight(p);
   refreshHud();
 }
 
@@ -809,7 +818,7 @@ function describeInFight(p: {
     if (p.veiled) txt += ' Shrouded — no arrow. The lit squares are everywhere it could strike.';
     else if (p.fickle) txt += ' Fickle — two arrows, and it takes whichever looks tastier.';
   } else if (p.spry) {
-    txt += ' Spry 🍯 — may also take a plain one-step, any direction. A stroll, never a pounce.';
+    txt += ` Spry ${iconHTML('honey')} — may also take a plain one-step, any direction. A stroll, never a pounce.`;
   }
   return txt;
 }
@@ -844,7 +853,7 @@ function proceedAfterPlayerAction() {
     return;
   }
   if (!sess.resolveDue) {
-    hintEl.textContent = 'Second Breakfast! 🥞 One more move — a stretch, not a snatch.';
+    hintEl.innerHTML = `Second Breakfast! ${iconHTML('pancakes')} One more move — a stretch, not a snatch.`;
     refreshHud();
     maybeAutoWait();
     return;
@@ -867,8 +876,8 @@ function beginEnemyTurn() {
   const anyAction = snapTelegraphs.some((t) => t.to);
   const stolen = tempoKind ? KIND_INFO[tempoKind].title : null;
   tempoKind = null;
-  hintEl.textContent = stolen
-    ? `You caught the ${stolen} mid-lunge! 🌼`
+  hintEl.innerHTML = stolen
+    ? `You caught the ${stolen} mid-lunge! ${iconHTML('daisy')}`
     : anyAction
       ? "Watch the bramble's move…"
       : 'The bramble stirs…';
@@ -886,7 +895,7 @@ function beginEnemyTurn() {
         ? `You caught the ${stolen} mid-lunge — one less move against you!`
         : null
       : stolen
-        ? `You caught the ${stolen} mid-lunge — the bramble loses its whole turn! 🌼`
+        ? `You caught the ${stolen} mid-lunge — the bramble loses its whole turn! ${iconHTML('daisy')}`
         : 'The bramble holds still — nothing moves this turn. Go!';
     doEntry({ t: 'resolve' });
     drainEvents();
@@ -909,7 +918,7 @@ function beginEnemyTurn() {
         tweens = [];
         frozenTelegraphs = null;
         phase = 'player';
-        if (fight!.status === 'playing') hintEl.textContent = blockedNote ?? DEFAULT_HINT;
+        if (fight!.status === 'playing') hintEl.innerHTML = blockedNote ?? DEFAULT_HINT;
         refreshHud();
         if (fight!.status !== 'playing') setTimeout(endOfFightUi, 350);
         else maybeAutoWait();
@@ -958,7 +967,7 @@ function enterHistory() {
   selected = null;
   inspect = null;
   historyBar.classList.remove('hidden');
-  hintEl.textContent = 'Looking back. The meadow waits — nothing moves while you remember.';
+  hintEl.innerHTML = 'Looking back. The meadow waits — nothing moves while you remember.';
   refreshHistoryBar();
   refreshHud();
 }
@@ -975,7 +984,7 @@ function exitHistory() {
   if (!history) return;
   history = null;
   historyBar.classList.add('hidden');
-  hintEl.textContent = DEFAULT_HINT;
+  hintEl.innerHTML = DEFAULT_HINT;
   refreshHud();
 }
 
@@ -1081,7 +1090,7 @@ function devSection(parent: HTMLElement, title: string): HTMLDivElement {
 
 function showDevPanel() {
   if (!sess || !run) return;
-  overlayEl.innerHTML = '<div class="card dev"><h2>🔧 Dev</h2><div class="dev-body"></div><div class="btns"><button class="close">Close</button></div></div>';
+  overlayEl.innerHTML = `<div class="card dev"><h2>${iconHTML('wrench', 'p2')} Dev</h2><div class="dev-body"></div><div class="btns"><button class="close">Close</button></div></div>`;
   const body = overlayEl.querySelector<HTMLDivElement>('.dev-body')!;
   overlayEl.querySelector<HTMLButtonElement>('.close')!.onclick = () => {
     overlayEl.classList.add('hidden');
@@ -1090,8 +1099,8 @@ function showDevPanel() {
 
   const note = document.createElement('p');
   note.className = 'dev-note';
-  note.textContent = devDirty
-    ? '⚠ hand-tuned session: saving and look-back are off until a new run'
+  note.innerHTML = devDirty
+    ? `${iconHTML('warning')} hand-tuned session: saving and look-back are off until a new run`
     : 'tuning anything turns off saving and look-back for this session';
   body.append(note);
 
@@ -1133,16 +1142,16 @@ function showDevPanel() {
   diffRow.append(diffLabel, diffSlider);
   diffBox.append(diffRow);
   // named style presets: one tap to a whole play-feel, no dial fiddling
-  const STYLES: { label: string; factor: number }[] = [
-    { label: '🍵 Cozy', factor: 0 },
-    { label: '🌿 Gentle', factor: 0.5 },
-    { label: '⚖️ Balanced', factor: 1 },
-    { label: '🔥 Sharp', factor: 1.5 },
-    { label: '🐺 Relentless', factor: 2 },
+  const STYLES: { icon: IconName; label: string; factor: number }[] = [
+    { icon: 'teacup', label: 'Cozy', factor: 0 },
+    { icon: 'fern', label: 'Gentle', factor: 0.5 },
+    { icon: 'scales', label: 'Balanced', factor: 1 },
+    { icon: 'fire', label: 'Sharp', factor: 1.5 },
+    { icon: 'wolf', label: 'Relentless', factor: 2 },
   ];
   for (const st of STYLES) {
     const b = document.createElement('button');
-    b.textContent = st.label;
+    b.append(iconEl(st.icon), ` ${st.label}`);
     b.onclick = () => setDifficulty(st.factor);
     diffBox.append(b);
   }
@@ -1205,14 +1214,14 @@ function showDevPanel() {
   toggles.append(veilBtn);
   for (const id of Object.keys(TRINKETS) as (keyof typeof TRINKETS)[]) {
     const b = document.createElement('button');
-    const label = () => `${TRINKETS[id].icon} ${run!.trinkets.includes(id) ? 'ON' : 'off'}`;
-    b.textContent = label();
+    const label = () => `${iconHTML(TRINKET_ICONS[id])} ${run!.trinkets.includes(id) ? 'ON' : 'off'}`;
+    b.innerHTML = label();
     b.onclick = () => {
       markDevDirty();
       run!.trinkets = run!.trinkets.includes(id)
         ? run!.trinkets.filter((t) => t !== id)
         : [...run!.trinkets, id];
-      b.textContent = label();
+      b.innerHTML = label();
       refreshHud();
     };
     toggles.append(b);
@@ -1285,11 +1294,11 @@ canvas.addEventListener('click', (ev) => {
   inspect = c;
   if (p) {
     selected = p.side === 'friend' ? p.id : null;
-    hintEl.textContent = describeInFight(p);
+    hintEl.innerHTML = describeInFight(p);
   } else {
     selected = null;
     inspect = null;
-    hintEl.textContent = DEFAULT_HINT;
+    hintEl.innerHTML = DEFAULT_HINT;
   }
   refreshHud();
 });
@@ -1327,12 +1336,12 @@ function drainEvents() {
       blockedNote = 'The Thistle reaches your hedge and twists into a Gloom! Never let one walk the whole meadow.';
     } else if (ev.type === 'smothered') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
-      blockedNote = 'Smothered underfoot — nothing grows there today! 🌼';
+      blockedNote = `Smothered underfoot — nothing grows there today! ${iconHTML('daisy')}`;
     } else if (ev.type === 'cloaked') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
       blockedNote = `The Dandelion Cloak whisks ${
         ev.kind === 'keeper' ? 'the Keeper' : `the ${KIND_INFO[ev.kind].title}`
-      } safely home! 🧣`;
+      } safely home! ${iconHTML('cloak')}`;
     } else {
       fx.push({ at: ev.at, kind: ev.type === 'capture' ? 'poof' : 'shaken', t: 0 });
     }
