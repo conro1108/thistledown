@@ -21,7 +21,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
     <span id="fightname">Overgrown</span>
-    <span id="hud-right"><button id="dev-btn" class="trinket hidden" title="Dev">🔧</button><button id="history-btn" class="trinket hidden" title="Look back">⏪</button><span id="trinkets"></span></span>
+    <span id="hud-right"><button id="dev-btn" class="trinket" title="Dev">🔧</button><button id="history-btn" class="trinket hidden" title="Look back">⏪</button><span id="trinkets"></span></span>
   </header>
   <div id="board-area">
     <canvas id="backdrop" width="1" height="1"></canvas>
@@ -633,7 +633,7 @@ function refreshHud() {
     devDirty || !sess || sess.stage !== 'fight' || fight.status !== 'playing',
   );
   historyBtn.disabled = phase !== 'player';
-  devBtn.classList.toggle('hidden', !devMode);
+  devBtn.classList.remove('hidden');
   trinketsEl.innerHTML = '';
   for (const id of run.trinkets) {
     // a real button: title= tooltips don't exist on a phone
