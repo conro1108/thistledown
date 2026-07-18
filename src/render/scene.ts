@@ -187,6 +187,10 @@ function sliderLane(s: FightState, from: Vec, to: Vec): { end: Vec; bite: Vec | 
   const dy = Math.sign(to.y - fy);
   let end: Vec = { x: fx, y: fy };
   let bite: Vec | null = null;
+  // No direction means no lane to walk. This happens mid-tween: `from` is the
+  // mover's interpolated position, and when it rounds onto an (empty) `to` the
+  // step below would be (0,0) and the loop would never advance — a hard freeze.
+  if (dx === 0 && dy === 0) return { end, bite };
   let x = fx + dx;
   let y = fy + dy;
   while (x >= 0 && y >= 0 && x < s.w && y < s.h) {
