@@ -195,7 +195,7 @@ describe('run', () => {
 });
 
 describe('the ladder (generateFights)', () => {
-  it('is four regions of four, deterministic per seed', () => {
+  it('is six regions of four, deterministic per seed', () => {
     expect(generateFights(99)).toEqual(generateFights(99));
     const fights = generateFights(99);
     expect(fights).toHaveLength(REGION_NAMES.length * FIGHTS_PER_REGION);
@@ -205,6 +205,10 @@ describe('the ladder (generateFights)', () => {
     expect(regionOf(11)).toBe(2);
     expect(regionOf(12)).toBe(3);
     expect(regionOf(15)).toBe(3);
+    expect(regionOf(16)).toBe(4);
+    expect(regionOf(19)).toBe(4);
+    expect(regionOf(20)).toBe(5);
+    expect(regionOf(23)).toBe(5);
   });
 
   it('different seeds grow different meadows (somewhere in the ladder)', () => {
@@ -213,16 +217,23 @@ describe('the ladder (generateFights)', () => {
     expect(a).not.toEqual(b);
   });
 
-  it('hearts cap regions 1, 3 and 4; the Gloom holds region 2', () => {
+  it('hearts cap regions 1, 3, 4, 5 and 6; the Gloom holds region 2', () => {
     const fights = generateFights(7);
-    expect(fights[3].enemies.some((e) => e.kind === 'heart')).toBe(true);
+    const heartAt = new Set([3, 11, 15, 19, 23]);
+    for (const i of heartAt) expect(fights[i].enemies.some((e) => e.kind === 'heart')).toBe(true);
     expect(fights[7].enemies.some((e) => e.kind === 'gloom')).toBe(true);
-    expect(fights[11].enemies.some((e) => e.kind === 'heart')).toBe(true);
-    expect(fights[15].enemies.some((e) => e.kind === 'heart')).toBe(true);
     // hearts nowhere else
     fights.forEach((f, i) => {
-      if (i !== 3 && i !== 11 && i !== 15) expect(f.enemies.some((e) => e.kind === 'heart')).toBe(false);
+      if (!heartAt.has(i)) expect(f.enemies.some((e) => e.kind === 'heart')).toBe(false);
     });
+  });
+
+  it('difficulty climbs into the endgame: Rotwood moves three a turn, the Worldroot four', () => {
+    const fights = generateFights(11);
+    for (let i = 16; i <= 19; i++) expect(fights[i].acts).toBeGreaterThanOrEqual(3);
+    for (let i = 20; i <= 23; i++) expect(fights[i].acts).toBe(4);
+    // the deepest regions never fall below the Deep Bramble's spread pressure
+    for (let i = 16; i <= 23; i++) expect(fights[i].spread!.cap).toBeGreaterThanOrEqual(9);
   });
 
   it('the training wheels come off on schedule: no fickle before Hedgerow, no shrouds before the Tanglewood', () => {

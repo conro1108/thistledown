@@ -107,7 +107,7 @@ export interface FightSpec {
 
 // ---------- the ladder: 4 regions × 4 clearings ----------
 
-export const REGION_NAMES = ['The Meadow', 'The Thicket', 'The Tanglewood', 'The Deep Bramble'];
+export const REGION_NAMES = ['The Meadow', 'The Thicket', 'The Tanglewood', 'The Deep Bramble', 'The Rotwood', 'The Worldroot'];
 export const FIGHTS_PER_REGION = 4;
 
 export function regionOf(fightIndex: number): number {
@@ -364,7 +364,7 @@ const TEMPLATES: FightTemplate[] = [
   {
     name: 'The Bramble Heart',
     intro:
-      'The heart of it all. It cannot be caught — no paw lands on it — and its guards will throw themselves into your net to save it. Cover everything. Leave it nothing.',
+      'The heart of the Deep Bramble. It cannot be caught — no paw lands on it — and its guards will throw themselves into your net to save it. Cover everything. Leave it nothing. (You will learn it was not the last of them.)',
     objective: CORNER_HEART,
     w: 8,
     h: 8,
@@ -380,6 +380,173 @@ const TEMPLATES: FightTemplate[] = [
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
     fickleChance: 0.4,
+    dials: { foresight: 1, caution: 1 },
+  },
+  // -------- The Rotwood: past the Heart, the wood has rotted mean. Three move every turn as a rule, most of them shrouded — read reaches, not arrows. --------
+  {
+    name: 'Witherreach',
+    intro:
+      'You thought the Heart was the end. The Rotwood begins where its roots rot. Three things move every turn here, and most keep their intent to themselves — tap and read every reach before you step.',
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 9, every: 3, cap: 9 },
+    core: [
+      { kind: 'golem', veiled: true },
+      { kind: 'creeper', veiled: true },
+      { kind: 'tumbleweed' },
+      { kind: 'thistle' },
+    ],
+    budget: 5,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.5,
+    veiledChance: 0.5,
+    dials: { foresight: 1, caution: 1 },
+  },
+  {
+    name: 'The Choking Vines',
+    intro:
+      'Creepers and golems knot every lane at once. Some are lying about where they go; none of them will show you at all. Count the long lines twice, then once more.',
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 9, every: 3, cap: 9 },
+    core: [
+      { kind: 'golem', veiled: true },
+      { kind: 'creeper', veiled: true },
+      { kind: 'creeper', fickle: true },
+      { kind: 'thistle' },
+    ],
+    budget: 6,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.5,
+    veiledChance: 0.5,
+    dials: { foresight: 1, caution: 1 },
+  },
+  {
+    name: 'Blightmaw',
+    intro:
+      'Two Glooms breathe in the Rotwood — each one reaches anywhere, any distance, and neither will warn you. Keep the Keeper off every open line. There is no safe square, only the ones you have checked.',
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 9, every: 3, cap: 9 },
+    core: [
+      { kind: 'gloom', veiled: true },
+      { kind: 'gloom' },
+      { kind: 'golem' },
+      { kind: 'thistle' },
+    ],
+    budget: 4,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.5,
+    veiledChance: 0.4,
+    dials: { foresight: 1, caution: 1 },
+  },
+  {
+    name: 'The Rotting Heart',
+    intro:
+      'A Gloom coils around this Heart like a second skin, and the whole clearing is shrouded. Corner the Heart — but do not let the Gloom take the Keeper while you do. Cover the guards, cover the lanes, leave the Heart nowhere.',
+    objective: CORNER_HEART,
+    w: 8,
+    h: 8,
+    acts: 3,
+    spread: { after: 9, every: 3, cap: 9 },
+    core: [
+      { kind: 'heart' },
+      { kind: 'gloom', veiled: true },
+      { kind: 'golem' },
+      { kind: 'creeper', veiled: true },
+      { kind: 'thistle', fickle: true },
+    ],
+    budget: 2,
+    pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.4,
+    veiledChance: 0.4,
+    dials: { foresight: 1, caution: 1 },
+  },
+  // -------- The Worldroot: the true bottom. Four move every turn, glooms in the dark, nothing telegraphed. Everything the bramble ever was, and then the last Heart. --------
+  {
+    name: 'The Deepdark',
+    intro:
+      'Down past the Rotwood, where light never reached. Four things move every turn now, and the dark hides all of them. Slow down. Read every reach. One miss is the whole run.',
+    w: 8,
+    h: 8,
+    acts: 4,
+    spread: { after: 8, every: 3, cap: 10 },
+    core: [
+      { kind: 'gloom', veiled: true },
+      { kind: 'golem', veiled: true },
+      { kind: 'creeper', veiled: true },
+      { kind: 'tumbleweed' },
+    ],
+    budget: 5,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.5,
+    veiledChance: 0.6,
+    dials: { foresight: 1, caution: 1 },
+  },
+  {
+    name: 'Gallowsroot',
+    intro:
+      'The old root-golems hang here in the dark, and they still grind the lanes. Four move a turn, most of them shrouded, and every straight line is a threat until you have cleared it square by square.',
+    w: 8,
+    h: 8,
+    acts: 4,
+    spread: { after: 8, every: 3, cap: 10 },
+    core: [
+      { kind: 'golem', veiled: true },
+      { kind: 'golem', veiled: true },
+      { kind: 'gloom' },
+      { kind: 'creeper' },
+    ],
+    budget: 6,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.5,
+    veiledChance: 0.5,
+    dials: { foresight: 1, caution: 1 },
+  },
+  {
+    name: 'The Last Lanes',
+    intro:
+      'Everything the bramble ever learned, all at once, in the dark. Two Glooms, golems, creepers — four move every turn and not one will show its hand. This is the door to the bottom.',
+    w: 8,
+    h: 8,
+    acts: 4,
+    spread: { after: 8, every: 3, cap: 10 },
+    core: [
+      { kind: 'gloom', veiled: true },
+      { kind: 'gloom', veiled: true },
+      { kind: 'golem' },
+      { kind: 'creeper' },
+    ],
+    budget: 5,
+    pool: ['thistle', 'tumbleweed', 'creeper'],
+    fickleChance: 0.5,
+    veiledChance: 0.5,
+    dials: { foresight: 1, caution: 1 },
+  },
+  {
+    name: 'The Worldheart',
+    intro:
+      'The last Heart, at the bottom of everything, ringed by Glooms that will die to keep it. Four move every turn, all of them shrouded. Corner it. Leave it one square less than nothing. Then the wood is yours.',
+    objective: CORNER_HEART,
+    w: 8,
+    h: 8,
+    acts: 4,
+    spread: { after: 8, every: 3, cap: 10 },
+    core: [
+      { kind: 'heart' },
+      { kind: 'gloom', veiled: true },
+      { kind: 'gloom', veiled: true },
+      { kind: 'golem', veiled: true },
+      { kind: 'creeper' },
+      { kind: 'thistle', fickle: true },
+    ],
+    budget: 2,
+    pool: ['thistle', 'tumbleweed'],
+    fickleChance: 0.4,
+    veiledChance: 0.5,
     dials: { foresight: 1, caution: 1 },
   },
 ];
