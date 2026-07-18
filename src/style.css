@@ -89,6 +89,23 @@ button, input, textarea, select { font-family: inherit; }
 }
 .trinket:active { border-color: var(--lantern); }
 
+/* movement upgrades are temporary — a tiny countdown of clearings left */
+.trinket { position: relative; }
+.upgrade-left {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 13px;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 13px;
+  text-align: center;
+  border-radius: 7px;
+  background: var(--lantern);
+  color: #1a1626;
+  font-weight: 700;
+}
+
 /* ---------- board ---------- */
 
 #board-area {

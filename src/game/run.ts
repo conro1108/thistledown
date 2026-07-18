@@ -7,9 +7,26 @@ export interface Companion {
   kind: Kind;
   name: string;
   shaken: boolean;
-  /** ate a honeycake: permanent plain one-step move */
-  spry?: boolean;
+  /**
+   * Ate a honeycake: a plain one-step move, but only for a while. Holds the
+   * clearing index the spring wears off *before* (active while
+   * `fightIndex < spryUntil`) — comforts are temporary now, not run-long.
+   */
+  spryUntil?: number;
 }
+
+/** A movement upgrade the band carries, and the clearing index it fades before. */
+export interface OwnedUpgrade {
+  id: UpgradeId;
+  until: number;
+}
+
+/**
+ * Movement upgrades and honeycakes are temporary: they last this many clearings
+ * from the campfire they're picked up at, then fade. Trinkets stay run-long —
+ * they're the run-defining relics; these smaller bends are the fast-spent treats.
+ */
+export const TEMP_LIFESPAN = 3;
 
 export interface RunState {
   seed: number;
@@ -19,8 +36,13 @@ export interface RunState {
   fights: FightSpec[];
   companions: Companion[];
   trinkets: TrinketId[];
-  /** movement upgrades owned this run — run-level, applied to every companion of the matching kind */
-  upgrades: UpgradeId[];
+  /**
+   * Movement upgrades the band has picked up, each with the clearing it fades
+   * before. Run-level and applied to every companion of the matching kind while
+   * live — but temporary now (see TEMP_LIFESPAN), so an id can appear more than
+   * once across a run as it's re-earned at later campfires.
+   */
+  upgrades: OwnedUpgrade[];
   status: 'playing' | 'won' | 'lost';
   /**
    * Dev-only master difficulty knob: one number that scales every clearing's
@@ -638,6 +660,17 @@ export function makeName(run: RunState): string {
 }
 
 /**
+ * Recruits no longer wander in after every single clearing — the band grew to
+ * cap almost immediately that way. A friend is watching after every *other*
+ * clearing instead (call this after `afterFightWon` has advanced the index, so
+ * the clearing just won is `fightIndex - 1`). The first clearing still ends in
+ * a recruit, keeping the early on-ramp intact.
+ */
+export function recruitDue(run: RunState): boolean {
+  return (run.fightIndex - 1) % 2 === 0;
+}
+
+/**
  * Distinct recruit offers, drawn from a pool that grows region by region. Two
  * by default; Beginner's Luck adds a third (capped at what the pool can spare).
  */
@@ -791,9 +824,23 @@ export const UPGRADES: Record<UpgradeId, { title: string; blurb: string; kind: K
   },
 };
 
-/** Which upgrades a companion of `kind` currently carries (run-level, by kind). */
+/** Distinct upgrades still live this clearing (fade at `until`), newest kept. */
+export function activeUpgrades(run: RunState): UpgradeId[] {
+  const live = new Set<UpgradeId>();
+  for (const u of run.upgrades) if (run.fightIndex < u.until) live.add(u.id);
+  return [...live];
+}
+
+/** Clearings an upgrade has left before it fades, or 0 if it isn't live. */
+export function upgradeClearingsLeft(run: RunState, id: UpgradeId): number {
+  let left = 0;
+  for (const u of run.upgrades) if (u.id === id) left = Math.max(left, u.until - run.fightIndex);
+  return Math.max(0, left);
+}
+
+/** Which live upgrades a companion of `kind` currently carries (by kind). */
 export function upgradesForKind(run: RunState, kind: Kind): UpgradeId[] {
-  return run.upgrades.filter((u) => UPGRADES[u].kind === kind);
+  return activeUpgrades(run).filter((u) => UPGRADES[u].kind === kind);
 }
 
 /**
@@ -804,8 +851,10 @@ export function upgradesForKind(run: RunState, kind: Kind): UpgradeId[] {
 export function offerUpgrades(run: RunState, n: number): UpgradeId[] {
   const r = regionOf(run.fightIndex);
   const have = new Set(run.companions.map((c) => c.kind));
+  // temporary now, so a faded upgrade can surface again — only *live* ones are withheld
+  const live = new Set(activeUpgrades(run));
   const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter(
-    (u) => !run.upgrades.includes(u) && UPGRADES[u].region <= r && have.has(UPGRADES[u].kind),
+    (u) => !live.has(u) && UPGRADES[u].region <= r && have.has(UPGRADES[u].kind),
   );
   const out: UpgradeId[] = [];
   while (out.length < n && pool.length) {
@@ -814,8 +863,9 @@ export function offerUpgrades(run: RunState, n: number): UpgradeId[] {
   return out;
 }
 
+/** Learn (or re-learn) an upgrade at the fire; it fades TEMP_LIFESPAN clearings on. */
 export function takeUpgrade(run: RunState, id: UpgradeId) {
-  if (!run.upgrades.includes(id)) run.upgrades.push(id);
+  run.upgrades.push({ id, until: run.fightIndex + TEMP_LIFESPAN });
 }
 
 // ---------- camp ----------
@@ -830,10 +880,15 @@ export function campHeal(run: RunState) {
   for (const c of run.companions) c.shaken = false;
 }
 
-/** Honeycake: one companion gains a permanent plain one-step move. */
+/** Whether a companion's honeycake spring is still in their step this clearing. */
+export function isSpry(run: RunState, c: Companion): boolean {
+  return c.spryUntil !== undefined && run.fightIndex < c.spryUntil;
+}
+
+/** Honeycake: one companion gains a plain one-step move for TEMP_LIFESPAN clearings. */
 export function campSnack(run: RunState, companionIdx: number) {
   const c = run.companions[companionIdx];
-  if (c) c.spry = true;
+  if (c) c.spryUntil = run.fightIndex + TEMP_LIFESPAN;
 }
 
 export interface BuiltFight {
@@ -922,7 +977,7 @@ export function buildFightConfig(run: RunState): BuiltFight {
       kind: c.kind,
       x,
       y,
-      spry: c.spry || whistled || undefined,
+      spry: isSpry(run, c) || whistled || undefined,
       upgrades: ups.length ? ups : undefined,
     });
     lineup.push(i);

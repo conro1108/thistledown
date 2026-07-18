@@ -13,11 +13,13 @@ import {
   campDue,
   campHeal,
   campSnack,
+  isSpry,
   newRun,
   offerRecruits,
   offerTrinkets,
   offerUpgrades,
   recruit,
+  recruitDue,
   ROSTER_CAP,
   takeTrinket,
   takeUpgrade,
@@ -198,7 +200,7 @@ function step(s: Session, e: LogEntry): boolean {
     }
     case 'snack': {
       const c = s.run.companions[e.idx];
-      if (s.stage !== 'camp' || !c || c.spry) return false;
+      if (s.stage !== 'camp' || !c || isSpry(s.run, c)) return false;
       campSnack(s.run, e.idx);
       leaveCamp(s);
       return true;
@@ -253,7 +255,8 @@ function settleIfEnded(s: Session): boolean {
     s.stage = 'over';
     return true;
   }
-  s.recruitOffers = s.run.companions.length < ROSTER_CAP ? offerRecruits(s.run) : null;
+  s.recruitOffers =
+    s.run.companions.length < ROSTER_CAP && recruitDue(s.run) ? offerRecruits(s.run) : null;
   s.stage = 'post';
   return true;
 }

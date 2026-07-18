@@ -2,11 +2,16 @@ import './style.css';
 import { movesFor, pieceAt } from './game/board';
 import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
 import {
+  activeUpgrades,
+  isSpry,
   KIND_INFO,
   REGION_NAMES,
   regionOf,
+  ROSTER_CAP,
   scaleDials,
+  TEMP_LIFESPAN,
   TRINKETS,
+  upgradeClearingsLeft,
   UPGRADES,
   type RunState,
   type TrinketId,
@@ -567,7 +572,11 @@ function endOfFightUi() {
   const noteLine = note ? `<span class="scene-note">${note}</span>` : '';
 
   if (!sess.recruitOffers) {
-    showOverlay('Clearing won!', `Camp is full of friends already.${noteLine}`, [
+    const why =
+      run.companions.length >= ROSTER_CAP
+        ? 'Camp is full of friends already.'
+        : 'The grass is quiet — no one new is watching this time.';
+    showOverlay('Clearing won!', `${why}${noteLine}`, [
       {
         label: 'Onward',
         fn: () => {
@@ -668,7 +677,7 @@ function trinketFound() {
 function campStop() {
   if (!sess || !run) return;
   const shaken = run.companions.filter((c) => c.shaken).map((c) => c.kind);
-  const snackable = run.companions.some((c) => !c.spry);
+  const snackable = run.companions.some((c) => !isSpry(run!, c));
   const choices: SceneOption[] = [];
   if (shaken.length) {
     choices.push({
@@ -685,7 +694,7 @@ function campStop() {
     choices.push({
       icon: 'honey',
       label: 'Honeycake',
-      detail: 'One friend gets a spring in their step — for good. (A plain sidestep, any direction.)',
+      detail: `One friend gets a spring in their step for the next ${TEMP_LIFESPAN} clearings. (A plain sidestep, any direction.)`,
       fn: honeycakeChoice,
     });
   }
@@ -704,7 +713,7 @@ function campStop() {
     choices.push({
       icon: UPGRADE_ICONS[id],
       label: UPGRADES[id].title,
-      detail: `A trick learned by the fire. ${UPGRADES[id].blurb}`,
+      detail: `A trick learned by the fire — it holds for ${TEMP_LIFESPAN} clearings. ${UPGRADES[id].blurb}`,
       fn: () => {
         doEntry({ t: 'upgrade', id });
         stageUi();
@@ -734,11 +743,11 @@ function honeycakeChoice() {
     'Who gets it? (No take-backs — it is a very good cake.)',
     run.companions
       .map((c, i) => ({ c, i }))
-      .filter(({ c }) => !c.spry)
+      .filter(({ c }) => !isSpry(run!, c))
       .map(({ c, i }) => ({
         kind: c.kind,
         label: c.name,
-        detail: `${c.name} the ${KIND_INFO[c.kind].title} gains a plain one-step move in any direction — for good.`,
+        detail: `${c.name} the ${KIND_INFO[c.kind].title} gains a plain one-step move in any direction, for the next ${TEMP_LIFESPAN} clearings.`,
         fn: () => {
           doEntry({ t: 'snack', idx: i });
           stageUi();
@@ -826,6 +835,25 @@ function refreshHud() {
       ]);
     trinketsEl.append(t);
   }
+  // Movement upgrades are temporary — show each live one with the clearings it has left,
+  // so a fading trick never surprises the player.
+  for (const id of activeUpgrades(run)) {
+    const left = upgradeClearingsLeft(run, id);
+    const u = document.createElement('button');
+    u.className = 'trinket';
+    u.append(iconEl(UPGRADE_ICONS[id], 'p15'));
+    const badge = document.createElement('span');
+    badge.className = 'upgrade-left';
+    badge.textContent = String(left);
+    u.append(badge);
+    u.onclick = () =>
+      showOverlay(
+        `${iconHTML(UPGRADE_ICONS[id], 'p2')} ${UPGRADES[id].title}`,
+        `${UPGRADES[id].blurb} Fades in ${plural(left, 'clearing')}.`,
+        [{ label: 'Onward', fn: () => {} }],
+      );
+    trinketsEl.append(u);
+  }
   renderRoster();
 }
 
@@ -838,7 +866,7 @@ function renderRoster() {
     const pieceId = companionPieceId.get(i);
     const alive = pieceId != null && fight.pieces.some((p) => p.id === pieceId);
     rosterEl.append(
-      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? 'zzz' : c.spry ? 'honey' : undefined),
+      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? 'zzz' : isSpry(run, c) ? 'honey' : undefined),
     );
   }
 }

@@ -8,16 +8,20 @@ import {
   campSnack,
   FIGHTS_PER_REGION,
   generateFights,
+  isSpry,
   newRun,
   offerRecruits,
   offerTrinkets,
   offerUpgrades,
   recruit,
+  recruitDue,
   REGION_NAMES,
   regionOf,
   scaleDials,
   takeTrinket,
   takeUpgrade,
+  TEMP_LIFESPAN,
+  upgradesForKind,
 } from './run';
 import type { FightState, Piece } from './types';
 
@@ -137,7 +141,7 @@ describe('run', () => {
     campHeal(run);
     expect(run.companions.every((c) => !c.shaken)).toBe(true);
     campSnack(run, 2);
-    expect(run.companions[2].spry).toBe(true);
+    expect(isSpry(run, run.companions[2])).toBe(true);
     // the buff reaches the board
     const { cfg, lineup } = buildFightConfig(run);
     const j = lineup.indexOf(2);
@@ -254,7 +258,7 @@ describe('movement upgrades (run)', () => {
     expect(offerUpgrades(run, 9)).toContain('sidestep');
   });
 
-  it('an owned upgrade is never offered again and rides onto every companion of its kind', () => {
+  it('a live upgrade is never offered again and rides onto every companion of its kind', () => {
     const run = newRun(3);
     takeUpgrade(run, 'thornstep');
     expect(offerUpgrades(run, 9)).not.toContain('thornstep');
@@ -265,6 +269,50 @@ describe('movement upgrades (run)', () => {
       if (run.companions[compIdx].kind === 'sprout') expect(sp.upgrades).toContain('thornstep');
       else expect(sp.upgrades).toBeUndefined();
     });
+  });
+
+  it('an upgrade fades after TEMP_LIFESPAN clearings, then can be earned again', () => {
+    const run = newRun(3);
+    takeUpgrade(run, 'thornstep'); // learned at clearing 0 → live through clearings 0..2
+    for (let i = 0; i < TEMP_LIFESPAN; i++) {
+      run.fightIndex = i;
+      expect(upgradesForKind(run, 'sprout')).toContain('thornstep');
+    }
+    run.fightIndex = TEMP_LIFESPAN; // the clearing it fades on
+    expect(upgradesForKind(run, 'sprout')).not.toContain('thornstep');
+    expect(buildFightConfig(run).cfg.friends[1].upgrades).toBeUndefined();
+    // faded, so it's on the table once more — and re-learning it re-arms the band
+    expect(offerUpgrades(run, 9)).toContain('thornstep');
+    takeUpgrade(run, 'thornstep');
+    expect(upgradesForKind(run, 'sprout')).toContain('thornstep');
+  });
+});
+
+describe('temporary comforts & recruit cadence', () => {
+  it('honeycake wears off after TEMP_LIFESPAN clearings', () => {
+    const run = newRun(3);
+    run.fightIndex = 3;
+    campSnack(run, 0); // spry through clearings 3..5
+    expect(isSpry(run, run.companions[0])).toBe(true);
+    run.fightIndex = 3 + TEMP_LIFESPAN - 1;
+    expect(isSpry(run, run.companions[0])).toBe(true);
+    run.fightIndex = 3 + TEMP_LIFESPAN;
+    expect(isSpry(run, run.companions[0])).toBe(false);
+    // and the board no longer sees the spring in their step
+    expect(buildFightConfig(run).cfg.friends[1].spry).toBeUndefined();
+  });
+
+  it('recruits are offered every other clearing, not after every one', () => {
+    const run = newRun(3);
+    // recruitDue reads fightIndex - 1 (the clearing just won), so 1,3,5.. → yes
+    run.fightIndex = 1;
+    expect(recruitDue(run)).toBe(true); // just cleared clearing 0
+    run.fightIndex = 2;
+    expect(recruitDue(run)).toBe(false); // just cleared clearing 1
+    run.fightIndex = 3;
+    expect(recruitDue(run)).toBe(true);
+    run.fightIndex = 4;
+    expect(recruitDue(run)).toBe(false);
   });
 });
 

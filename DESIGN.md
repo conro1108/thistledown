@@ -133,9 +133,14 @@ Slay-the-Spire-shaped, kept simple:
   45–75 min. (Started at 3 regions/12 fights; playtest verdict was "it stopped
   right as it was starting to get fun" — the extra region is where fickle,
   shrouded, and 3-acts get room to breathe, plus a second cornering boss.)
-- **Camp** between fights: heal shaken friends, feed snacks (small permanent buffs to
-  one critter), swap trinkets, tiny dialogue vignettes. Camp is the cozy valve — the
-  breather that makes the tactics feel earned.
+- **Camp** between fights: heal shaken friends, feed snacks (a small buff to one
+  critter that lasts a few clearings, then fades), swap trinkets, tiny dialogue
+  vignettes. Camp is the cozy valve — the breather that makes the tactics feel earned.
+- **Power decay**: snacks and movement upgrades are *temporary* — each lasts a few
+  clearings from the fire it's picked up at, then wears off. Trinkets alone are
+  permanent (the run-defining relics). Recruits arrive every *other* clearing, not
+  after every one. Together this keeps power from monotonically ballooning across a
+  long run and keeps campfire choices meaningful late instead of a done deal.
 - **Events**: little illustrated choose-one scenes. Risk/reward, jokes, occasional
   free recruit.
 - **Trinkets** (relics): run-defining passives. *Dandelion Cloak* — once per fight, a
