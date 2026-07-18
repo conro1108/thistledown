@@ -25,6 +25,7 @@ import type { FightState, Kind, Telegraph, UpgradeId, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
 import { iconEl, iconHTML, type IconName } from './render/icons';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
+import { themeFor, type RegionTheme } from './render/themes';
 import { drawSprite } from './render/sprites';
 import { isMuted, playSfx, soundForEvent, toggleMute, unlockAudio, type SoundName } from './audio';
 
@@ -393,6 +394,7 @@ const DIAG_D = [
 // ---------- run flow ----------
 
 function title() {
+  applyRegionTheme(themeFor(0)); // the title sits at the meadow's edge
   // a run you never actually played (no moves yet) isn't worth resuming —
   // don't make the player choose between two identical fresh starts
   const loaded = loadSave();
@@ -440,10 +442,21 @@ function retryClearing() {
 }
 
 /** Show whatever screen the session's stage calls for. */
+/** Repaint the overlay/card chrome in the current region's palette. */
+function applyRegionTheme(theme: RegionTheme) {
+  const root = document.documentElement.style;
+  root.setProperty('--panel-solid', theme.css.panel);
+  root.setProperty('--panel-2', theme.css.panel2);
+  root.setProperty('--edge', theme.css.edge);
+  root.setProperty('--overlay-bg', theme.css.scrim);
+  root.setProperty('--accent', theme.css.accent);
+}
+
 function stageUi() {
   if (!sess) return;
   run = sess.run;
   fight = sess.fight;
+  applyRegionTheme(themeFor(regionOf(run.fightIndex)));
   switch (sess.stage) {
     case 'intro':
       fightIntro();
@@ -1499,10 +1512,12 @@ window.addEventListener('orientationchange', () => requestAnimationFrame(sizeCan
 if ('ResizeObserver' in window) new ResizeObserver(sizeCanvas).observe(boardAreaEl);
 
 function frame(time: number) {
-  drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time);
+  const theme = themeFor(run ? regionOf(run.fightIndex) : 0);
+  const ground: [string, string] = [theme.boardA, theme.boardB];
+  drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time, theme);
   if (history) {
     // a remembered board: no selection, no effects, just the moment
-    draw(ctx, history.states[history.idx].f, { selected: null, hover: null, fx: [] }, time);
+    draw(ctx, history.states[history.idx].f, { selected: null, hover: null, fx: [], ground }, time);
   } else if (fight) {
     let overrides: PosOverrides | undefined;
     if (tweens.length) {
@@ -1519,6 +1534,7 @@ function frame(time: number) {
         posOverrides: overrides,
         telegraphOverride: frozenTelegraphs ?? undefined,
         revealVeiled: revealVeiled || undefined,
+        ground,
       },
       time,
     );

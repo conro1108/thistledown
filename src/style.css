@@ -1,10 +1,15 @@
 :root {
+  /* per-region defaults (the Deep Bramble palette); main.ts overrides these on
+     <html> as you move region to region — see applyRegionTheme */
   --panel-solid: #262233;
   --panel-2: #2e2940;
   --edge: #443e58;
+  --overlay-bg: rgba(10, 8, 16, 0.84);
+  --accent: #8fc460;
   --ink: #e8e2cf;
   --ink-soft: #a297b0;
   --lantern: #ffd166; /* the Keeper's light — the one warm thing out here */
+  transition: --panel-solid 0.4s, --edge 0.4s; /* harmless where unsupported */
   color-scheme: dark;
 }
 
@@ -236,7 +241,8 @@ canvas {
   /* must beat #board-wrap's z-index or the canvas paints over the card and
      eats the taps meant for its buttons (the "stuck after winning" bug) */
   z-index: 100;
-  background: rgba(10, 8, 16, 0.84);
+  background: var(--overlay-bg);
+  transition: background 0.4s;
   display: flex;
   align-items: center;
   justify-content: center;

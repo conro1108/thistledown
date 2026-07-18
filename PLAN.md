@@ -66,6 +66,12 @@ shaken friend *oofs*, tempo/rescue *sparkle*, a twist *alarms*); move-clicks,
 piece-pick blips, win/lose jingles. Deduped per drain, gentle master gain,
 persisted mute toggle in the HUD, iOS-safe unlock on first gesture.
 
+**Per-region look** — `render/themes.ts` gives all six regions their own palette,
+driving the backdrop (sky/treeline/water/motes — fireflies → wisps → spores →
+frost, sun vs. crescent), the board grass, and the overlay/card chrome (CSS vars
+set on `<html>` per region). The Meadow glows golden; the Worldroot is a cold
+lightless indigo.
+
 ## P2 — Open
 
 - [ ] **Real art pass** — current sprites are placeholders-with-charm.

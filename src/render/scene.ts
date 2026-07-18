@@ -23,16 +23,19 @@ export interface View {
   telegraphOverride?: Telegraph[];
   /** dev x-ray: draw shrouded telegraphs as real arrows */
   revealVeiled?: boolean;
+  /** the region's two checker greens for the board tiles */
+  ground?: [string, string];
 }
 
 const GRASS_A = '#87aa56';
 const GRASS_B = '#7b9e4b';
 
 export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time: number) {
-  // ground — plain grass for now; decorate later
+  // ground — the region's checker; the Deep Bramble greens are the fallback
+  const [grassA, grassB] = v.ground ?? [GRASS_A, GRASS_B];
   for (let y = 0; y < s.h; y++) {
     for (let x = 0; x < s.w; x++) {
-      ctx.fillStyle = (x + y) % 2 === 0 ? GRASS_A : GRASS_B;
+      ctx.fillStyle = (x + y) % 2 === 0 ? grassA : grassB;
       ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
     }
   }
