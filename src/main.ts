@@ -1,5 +1,5 @@
 import './style.css';
-import { isPawn, movesFor, pieceAt } from './game/board';
+import { movesFor, pieceAt } from './game/board';
 import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
 import { KIND_INFO, REGION_NAMES, regionOf, scaleDials, TRINKETS, type RunState, type TrinketId } from './game/run';
 import {
@@ -23,6 +23,15 @@ const TRINKET_ICONS: Record<TrinketId, IconName> = {
   cloak: 'cloak',
   whistle: 'acorn',
   breakfast: 'pancakes',
+};
+
+/** A one-line move phrase for the compact recruit cards (KIND_INFO blurbs run long). */
+const MOVE_TAG: Partial<Record<Kind, string>> = {
+  sprout: 'Steps ahead, pokes on the slant',
+  hopper: 'Leaps in an L, over anything',
+  slink: 'Glides on the diagonals',
+  rumble: 'Barrels in straight lines',
+  duchess: 'Goes anywhere, any distance',
 };
 
 const OBJECTIVE = 'Catch every bramble creature to win the clearing.';
@@ -232,25 +241,47 @@ interface SceneOption {
   icon?: IconName;
   label: string;
   detail: string;
+  /** short move phrase shown under the name in the compact 'row' layout */
+  caption?: string;
   fn: () => void;
 }
 
 /**
- * The between-fights picker: little cards, one tap commits. Each critter card
- * carries the sprite, its name, a one-line blurb, and a faint arrow-hint of how
- * it moves drawn right on the card — plenty to choose on, no preview box, no
- * confirm step.
+ * The between-fights picker: one tap commits, no preview box, no confirm step.
+ *
+ * Two layouts share this builder. The default 'list' stacks wide rows (sprite +
+ * name + blurb) — used by the campfire and trinket scenes. The 'row' layout
+ * lays out square cards side by side (sprite + name + short caption), and for
+ * critters that glide in straight lines it paints a faint +/×/✳ of movement
+ * rays behind the sprite — a quiet, wordless hint of reach. Steppers and
+ * leapers get no such background; their one-line caption already says it.
  */
-function showChoiceScene(title: string, body: string, options: SceneOption[]) {
+function showChoiceScene(
+  title: string,
+  body: string,
+  options: SceneOption[],
+  layout: 'list' | 'row' = 'list',
+) {
   overlayEl.innerHTML = `<div class="card"><h2></h2><p class="scene-body"></p>
     <div class="opts"></div></div>`;
   // titles and bodies are app-authored strings that may carry inline icons
   overlayEl.querySelector('h2')!.innerHTML = title;
   overlayEl.querySelector('.scene-body')!.innerHTML = body;
   const optsEl = overlayEl.querySelector('.opts')!;
+  if (layout === 'row') optsEl.classList.add('row');
   for (const o of options) {
     const b = document.createElement('button');
     b.className = 'opt';
+    // a faint movement watermark behind slider critters (row layout only)
+    const bgType = layout === 'row' && o.kind ? moveBgType(o.kind) : null;
+    if (bgType) {
+      const bg = document.createElement('canvas');
+      bg.className = 'movebg';
+      bg.width = 24;
+      bg.height = 24;
+      drawMoveBg(bg.getContext('2d')!, bgType);
+      b.append(bg);
+    }
     if (o.kind) {
       const cv = document.createElement('canvas');
       cv.className = 'face';
@@ -265,18 +296,19 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
     nm.className = 'name';
     nm.textContent = o.label;
     b.append(nm);
-    if (o.kind) {
-      const hint = document.createElement('canvas');
-      hint.className = 'movehint';
-      hint.width = 13;
-      hint.height = 13;
-      drawMoveHint(hint.getContext('2d')!, o.kind);
-      b.append(hint);
+    if (layout === 'row') {
+      if (o.caption) {
+        const cap = document.createElement('span');
+        cap.className = 'cap';
+        cap.textContent = o.caption;
+        b.append(cap);
+      }
+    } else {
+      const blurb = document.createElement('span');
+      blurb.className = 'blurb';
+      blurb.textContent = o.detail;
+      b.append(blurb);
     }
-    const blurb = document.createElement('span');
-    blurb.className = 'blurb';
-    blurb.textContent = o.detail;
-    b.append(blurb);
     b.onclick = () => {
       overlayEl.classList.add('hidden');
       o.fn();
@@ -284,6 +316,38 @@ function showChoiceScene(title: string, body: string, options: SceneOption[]) {
     optsEl.append(b);
   }
   overlayEl.classList.remove('hidden');
+}
+
+/** Which faint movement watermark, if any, a critter earns behind its card. */
+function moveBgType(kind: Kind): '+' | 'x' | '*' | null {
+  if (kind === 'rumble' || kind === 'golem') return '+'; // straight-line sliders
+  if (kind === 'slink' || kind === 'creeper') return 'x'; // diagonal sliders
+  if (kind === 'duchess' || kind === 'gloom') return '*'; // glide any direction
+  return null; // steppers, leapers, kings: caption alone
+}
+
+/**
+ * A faint background of movement rays for a card: '+' orthogonal, '×' diagonal,
+ * '✳' both. Drawn center-out with little arrowheads on a 24×24 buffer, integer-
+ * scaled and dimmed by CSS so it reads as a watermark, not a diagram.
+ */
+function drawMoveBg(c: CanvasRenderingContext2D, type: '+' | 'x' | '*') {
+  const mid = 12;
+  c.fillStyle = '#ffd966';
+  const px = (x: number, y: number) => c.fillRect(x, y, 1, 1);
+  const ray = (dx: number, dy: number) => {
+    let x = mid;
+    let y = mid;
+    for (let i = 0; i < 9; i++) {
+      x += dx;
+      y += dy;
+      px(x, y);
+    }
+    px(x - dx - dy, y - dy + dx); // arrowhead, flaring back from the tip
+    px(x - dx + dy, y - dy - dx);
+  };
+  const dirs = type === '+' ? ORTHO_D : type === 'x' ? DIAG_D : [...ORTHO_D, ...DIAG_D];
+  for (const [dx, dy] of dirs) ray(dx, dy);
 }
 
 const ORTHO_D = [
@@ -298,50 +362,6 @@ const DIAG_D = [
   [-1, 1],
   [-1, -1],
 ];
-
-/**
- * A faint 13×13 movement badge for a critter card: short arrows for steppers,
- * long rays to the edge for sliders, an L for leapers, a forward push plus two
- * diagonal pokes for pawns. Directions mirror the engine's MOVERS — a quiet
- * reminder of the piece's reach, drawn on the pixel grid like everything else.
- */
-function drawMoveHint(c: CanvasRenderingContext2D, kind: Kind) {
-  const mid = 6;
-  const col = 'rgba(255, 217, 102, 0.85)';
-  c.fillStyle = col;
-  const px = (x: number, y: number) => c.fillRect(x, y, 1, 1);
-  const ray = (dx: number, dy: number, len: number) => {
-    let x = mid;
-    let y = mid;
-    for (let i = 0; i < len; i++) {
-      x += dx;
-      y += dy;
-      px(x, y);
-    }
-    // arrowhead: two pixels flaring back from the tip, perpendicular to travel
-    px(x - dx - dy, y - dy + dx);
-    px(x - dx + dy, y - dy - dx);
-  };
-
-  if (isPawn(kind)) {
-    ray(0, -1, 3); // waddles forward
-    px(mid - 2, mid - 2); // pokes diagonally…
-    px(mid + 2, mid - 2); // …to both sides
-    return;
-  }
-  if (kind === 'hopper' || kind === 'tumbleweed') {
-    // two opposite L-leaps sketch the knight jump
-    for (const s of [1, -1]) {
-      px(mid, mid - s);
-      px(mid, mid - 2 * s);
-      px(mid + s, mid - 2 * s);
-    }
-    return;
-  }
-  const dirs = kind === 'slink' || kind === 'creeper' ? DIAG_D : kind === 'rumble' || kind === 'golem' ? ORTHO_D : [...ORTHO_D, ...DIAG_D];
-  const slides = kind !== 'keeper' && kind !== 'heart'; // king-movers step, the rest slide
-  for (const [dx, dy] of dirs) ray(dx, dy, slides ? 4 : 2);
-}
 
 // ---------- run flow ----------
 
@@ -492,20 +512,22 @@ function endOfFightUi() {
   // stage 'post': clearing won, maybe a recruit is watching
   const shaken = run.companions.filter((c) => c.shaken).map((c) => c.kind);
   const shakenNote = shaken.length
-    ? ` ${listKinds(shaken)} ${shaken.length > 1 ? 'are' : 'is'} a bit shaken and will sit the next one out.`
+    ? `${cap(listKinds(shaken))} ${shaken.length > 1 ? 'sit' : 'sits'} the next one out.`
     : '';
   // fewest-moves record for the clearing that just fell
   const moves = movesThisClearing(sess);
   const rec = recordClearing(fight?.name ?? 'this clearing', moves);
   const movesNote = rec.improved
-    ? ` Cleared in ${plural(moves, 'move')} — a new best! ${iconHTML('sparkle')}`
+    ? `Cleared in ${plural(moves, 'move')} — a new best! ${iconHTML('sparkle')}`
     : rec.best !== undefined
-      ? ` Cleared in ${plural(moves, 'move')} (best ${rec.best}).`
-      : ` Cleared in ${plural(moves, 'move')}.`;
-  const body = `The brambles scatter into flowers.${shakenNote}${movesNote}`;
+      ? `Cleared in ${plural(moves, 'move')} (best ${rec.best}).`
+      : `Cleared in ${plural(moves, 'move')}.`;
+  // a quiet secondary line: the record, then who's sitting out
+  const note = [movesNote, shakenNote].filter(Boolean).join(' ');
+  const noteLine = note ? `<span class="scene-note">${note}</span>` : '';
 
   if (!sess.recruitOffers) {
-    showOverlay('Clearing won!', body + ' Camp is full of friends already.', [
+    showOverlay('Clearing won!', `Camp is full of friends already.${noteLine}`, [
       {
         label: 'Onward',
         fn: () => {
@@ -517,26 +539,38 @@ function endOfFightUi() {
     return;
   }
 
-  showChoiceScene('Clearing won!', body + ' Someone shy is watching from the tall grass…', [
-    ...sess.recruitOffers.map((kind) => ({
-      kind,
-      label: KIND_INFO[kind].title,
-      detail: KIND_INFO[kind].blurb,
-      fn: () => {
-        doEntry({ t: 'recruit', kind });
-        stageUi();
+  showChoiceScene(
+    'Clearing won!',
+    `Someone shy is watching from the tall grass…${noteLine}`,
+    [
+      ...sess.recruitOffers.map((kind) => ({
+        kind,
+        label: KIND_INFO[kind].title,
+        detail: KIND_INFO[kind].blurb,
+        caption: MOVE_TAG[kind] ?? '',
+        fn: () => {
+          doEntry({ t: 'recruit', kind });
+          stageUi();
+        },
+      })),
+      {
+        icon: 'leaf' as IconName,
+        label: 'Travel light',
+        detail: 'No new friends this time — a smaller band moves quicker through the grass.',
+        caption: 'Smaller band, quicker going',
+        fn: () => {
+          doEntry({ t: 'skip' });
+          stageUi();
+        },
       },
-    })),
-    {
-      icon: 'leaf',
-      label: 'Travel light',
-      detail: 'No new friends this time — a smaller band moves quicker through the grass.',
-      fn: () => {
-        doEntry({ t: 'skip' });
-        stageUi();
-      },
-    },
-  ]);
+    ],
+    'row',
+  );
+}
+
+/** Capitalize the first letter — for notes that used to sit mid-sentence. */
+function cap(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 function endOfRunUi() {

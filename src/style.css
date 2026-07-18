@@ -337,7 +337,15 @@ canvas {
   margin-top: 14px;
 }
 
-/* one-tap rows: face + move-hint on the left, name + blurb on the right */
+/* a quiet secondary line under the scene body: record + who's sitting out */
+.scene-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+/* default 'list' layout — one-tap rows: face on the left, name + blurb on the right */
 .opt {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -360,16 +368,54 @@ canvas {
 }
 .opt .name { font-size: 13px; font-weight: bold; color: var(--ink); }
 .opt .blurb { font-size: 11.5px; line-height: 1.35; color: var(--ink-soft); }
-/* the faint how-it-moves reminder, sat under the sprite */
-.opt canvas.movehint {
-  grid-row: 1 / span 2;
-  width: 26px; /* 2× the 13px buffer — integer scale, always */
-  height: 26px;
-  image-rendering: pixelated;
-  opacity: 0.7;
-  align-self: center;
-}
 .opt:active { background: #3a3450; border-color: var(--lantern); }
+
+/* 'row' layout — square cards side by side (the recruit picker) */
+.card .opts.row {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+}
+.opts.row .opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 6px 10px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.opts.row .opt .face,
+.opts.row .opt img.face {
+  grid-row: auto;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  z-index: 1;
+}
+.opts.row .opt .name { font-size: 12.5px; }
+.opts.row .opt .cap {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+/* faint watermark of movement rays behind slider critters */
+.opts.row .opt .movebg {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  margin-left: -24px; /* half of 48px — integer offset */
+  width: 48px; /* 2× the 24px buffer — integer scale, always */
+  height: 48px;
+  image-rendering: pixelated;
+  opacity: 0.14;
+  pointer-events: none;
+  z-index: 0;
+}
 
 .confirm:disabled {
   opacity: 0.45;
