@@ -17,6 +17,7 @@ import { drawBackdrop } from './render/backdrop';
 import { iconEl, iconHTML, type IconName } from './render/icons';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
 import { drawSprite } from './render/sprites';
+import { isMuted, playSfx, soundForEvent, toggleMute, unlockAudio, type SoundName } from './audio';
 
 /** Each trinket's pixel icon — a UI pairing, kept out of the pure game module. */
 const TRINKET_ICONS: Record<TrinketId, IconName> = {
@@ -48,7 +49,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header id="hud">
     <span id="fightname">Overgrown</span>
-    <span id="hud-right"><button id="dev-btn" class="trinket" title="Dev">${iconHTML('wrench', 'p15')}</button><button id="history-btn" class="trinket hidden" title="Look back">${iconHTML('rewind', 'p15')}</button><span id="trinkets"></span></span>
+    <span id="hud-right"><button id="sound-btn" class="trinket" title="Sound">${iconHTML(isMuted() ? 'muted' : 'sound', 'p15')}</button><button id="dev-btn" class="trinket" title="Dev">${iconHTML('wrench', 'p15')}</button><button id="history-btn" class="trinket hidden" title="Look back">${iconHTML('rewind', 'p15')}</button><span id="trinkets"></span></span>
   </header>
   <div id="board-area">
     <canvas id="backdrop" width="1" height="1"></canvas>
@@ -84,6 +85,7 @@ const rosterEl = document.querySelector<HTMLDivElement>('#roster')!;
 const overlayEl = document.querySelector<HTMLDivElement>('#overlay')!;
 const historyBtn = document.querySelector<HTMLButtonElement>('#history-btn')!;
 const devBtn = document.querySelector<HTMLButtonElement>('#dev-btn')!;
+const soundBtn = document.querySelector<HTMLButtonElement>('#sound-btn')!;
 const historyBar = document.querySelector<HTMLDivElement>('#history-bar')!;
 const histPrev = document.querySelector<HTMLButtonElement>('#hist-prev')!;
 const histNext = document.querySelector<HTMLButtonElement>('#hist-next')!;
@@ -869,6 +871,8 @@ function attemptMove(pieceId: number, to: Vec) {
   }
   selected = null;
   inspect = null;
+  // a plain step gets a soft place-click; a capture speaks for itself in drainEvents
+  if (!fight.events.some((e) => e.type === 'capture')) playSfx('move');
   drainEvents();
   refreshHud();
   proceedAfterPlayerAction();
@@ -883,6 +887,7 @@ function proceedAfterPlayerAction() {
     return;
   }
   if (sess.stage !== 'fight') {
+    playOutcome();
     setTimeout(endOfFightUi, 650);
     return;
   }
@@ -954,8 +959,10 @@ function beginEnemyTurn() {
         phase = 'player';
         if (fight!.status === 'playing') hintEl.innerHTML = blockedNote ?? DEFAULT_HINT;
         refreshHud();
-        if (fight!.status !== 'playing') setTimeout(endOfFightUi, 350);
-        else maybeAutoWait();
+        if (fight!.status !== 'playing') {
+          playOutcome();
+          setTimeout(endOfFightUi, 350);
+        } else maybeAutoWait();
       },
       tweens.length ? TWEEN_MS : 60,
     );
@@ -1303,6 +1310,13 @@ function showDevPanel() {
 
 devBtn.onclick = showDevPanel;
 
+soundBtn.onclick = () => {
+  unlockAudio();
+  const nowMuted = toggleMute();
+  soundBtn.innerHTML = iconHTML(nowMuted ? 'muted' : 'sound', 'p15');
+  if (!nowMuted) playSfx('ui'); // a blip so you hear it come back on
+};
+
 // ---------- input ----------
 
 function cellFromEvent(ev: MouseEvent): Vec | null {
@@ -1315,6 +1329,7 @@ function cellFromEvent(ev: MouseEvent): Vec | null {
 }
 
 canvas.addEventListener('click', (ev) => {
+  unlockAudio(); // first tap on the board is a valid gesture to start audio
   if (history || !fight || fight.status !== 'playing' || phase !== 'player') return;
   const c = cellFromEvent(ev);
   if (!c) return;
@@ -1331,6 +1346,7 @@ canvas.addEventListener('click', (ev) => {
   inspect = c;
   if (p) {
     selected = p.side === 'friend' ? p.id : null;
+    if (p.side === 'friend') playSfx('ui'); // picking a friend up
     hintEl.innerHTML = describeInFight(p);
   } else {
     selected = null;
@@ -1346,8 +1362,18 @@ canvas.addEventListener('mousemove', (ev) => {
   if (c && selected == null) inspect = c;
 });
 
+/** The outcome jingle, once, when a fight settles into won/lost. */
+function playOutcome() {
+  if (fight?.status === 'won') playSfx('win');
+  else if (fight?.status === 'lost') playSfx('lose');
+}
+
 function drainEvents() {
   if (!fight) return;
+  // one sound per distinct kind this drain — a triple capture shouldn't triple-pop
+  const sounds = new Set<SoundName>();
+  for (const ev of fight.events) sounds.add(soundForEvent(ev.type));
+  for (const s of sounds) playSfx(s);
   for (const ev of fight.events) {
     if (ev.type === 'blocked') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });

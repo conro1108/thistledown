@@ -56,9 +56,14 @@ Key bumped whenever an engine change breaks replay; unreplayable logs are discar
 from-scratch PNG encoder), iOS meta. `public/sw.js` network-first + cache fallback;
 bump `CACHE` to invalidate. Confirmed installing/launching standalone on iPhone.
 
+**Sound** — `audio.ts`, a tiny WebAudio chiptune synth (no assets). Pure
+`soundForEvent` maps every FightEvent to a note figure (captures *pop*, a
+shaken friend *oofs*, tempo/rescue *sparkle*, a twist *alarms*); move-clicks,
+piece-pick blips, win/lose jingles. Deduped per drain, gentle master gain,
+persisted mute toggle in the HUD, iOS-safe unlock on first gesture.
+
 ## P2 — Open
 
-- [ ] **Sound** — WebAudio chiptune; captures pop into flowers. (Next session.)
 - [ ] **Real art pass** — current sprites are placeholders-with-charm.
 - [ ] **Balance pass on the 24-fight ladder** — dial curve, budgets, spread timings,
       and dual-boss difficulty are all first guesses. Playtest and tune.

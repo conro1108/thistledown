@@ -30,6 +30,8 @@ export type IconName =
   | 'wolf'
   | 'wrench'
   | 'rewind'
+  | 'sound'
+  | 'muted'
   | 'warning'
   | 'question';
 
@@ -356,6 +358,40 @@ export const ICONS: Record<IconName, Sprite> = {
       '...aa...aa..',
       '....a....a..',
       '............',
+      '............',
+      '............',
+    ],
+  },
+  sound: {
+    colors: { s: '#e8e2cf', w: '#a8adb8' },
+    rows: [
+      '............',
+      '......s.....',
+      '.....ss..w..',
+      '..ssss.w.w..',
+      '..ssss.w.w..',
+      '..ssss.wwww.',
+      '..ssss.w.w..',
+      '..ssss.w.w..',
+      '.....ss..w..',
+      '......s.....',
+      '............',
+      '............',
+    ],
+  },
+  muted: {
+    colors: { s: '#e8e2cf', k: '#c86b6b' },
+    rows: [
+      '............',
+      '......s.....',
+      '.....ss.....',
+      '..ssss.k..k.',
+      '..ssss..kk..',
+      '..ssss...k..',
+      '..ssss..kk..',
+      '..ssss.k..k.',
+      '.....ss.....',
+      '......s.....',
       '............',
       '............',
     ],
