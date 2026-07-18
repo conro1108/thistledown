@@ -122,6 +122,46 @@ describe('fight loop', () => {
     expect(s.freeMoveActive).toBe(false); // captures come back after the stretch
   });
 
+  it('Bramble Ward: the first capture is shrugged off — the Keeper included', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 4, y: 4 }, { kind: 'sprout', x: 0, y: 4 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+      1,
+      6,
+      6,
+      { ward: true },
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 4, y: 4 }); // it's coming for the Keeper
+    expect(s.wardLeft).toBe(1);
+    playerMove(s, idAt(s, 0, 4), { x: 0, y: 3 }); // a harmless decoy step
+    resolveEnemyTurn(s);
+    expect(s.status).toBe('playing'); // the Keeper stands
+    expect(s.pieces.find((p) => p.kind === 'keeper')).toMatchObject({ x: 4, y: 4 });
+    expect(s.wardLeft).toBe(0);
+    expect(s.events.some((ev) => ev.type === 'warded')).toBe(true);
+    // the attacker recoiled rather than completing onto the Keeper's square
+    expect(s.pieces.find((p) => p.kind === 'thistle')).toMatchObject({ x: 3, y: 3 });
+  });
+
+  it('Early Riser banks a second first-move stretch, stacking with Second Breakfast', () => {
+    const both = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }],
+      [{ kind: 'thistle', x: 5, y: 0 }],
+      1,
+      6,
+      6,
+      { secondBreakfast: true, riser: true },
+    );
+    expect(both.freeMoves).toBe(2);
+    expect(takeFreeMove(both)).toBe(true);
+    expect(takeFreeMove(both)).toBe(true);
+    expect(takeFreeMove(both)).toBe(false);
+    const solo = fight([{ kind: 'keeper', x: 0, y: 5 }], [{ kind: 'thistle', x: 5, y: 0 }], 1, 6, 6, {
+      riser: true,
+    });
+    expect(solo.freeMoves).toBe(1);
+  });
+
   it('Acorn Whistle: a sprout promoting into a hopper comes out spry', () => {
     const s = fight(
       [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'sprout', x: 5, y: 1 }],

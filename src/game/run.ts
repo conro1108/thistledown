@@ -1,7 +1,7 @@
 import { threatsFor } from './board';
 import type { FightConfig, Spawn } from './fight';
 import { mulberry32 } from './rng';
-import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, UpgradeId } from './types';
 
 export interface Companion {
   kind: Kind;
@@ -19,6 +19,8 @@ export interface RunState {
   fights: FightSpec[];
   companions: Companion[];
   trinkets: TrinketId[];
+  /** movement upgrades owned this run — run-level, applied to every companion of the matching kind */
+  upgrades: UpgradeId[];
   status: 'playing' | 'won' | 'lost';
   /**
    * Dev-only master difficulty knob: one number that scales every clearing's
@@ -620,6 +622,7 @@ export function newRun(seed: number): RunState {
       { kind: 'hopper', name: 'Biscuit', shaken: false },
     ],
     trinkets: [],
+    upgrades: [],
     status: 'playing',
   };
 }
@@ -634,7 +637,10 @@ export function makeName(run: RunState): string {
   return 'Kid ' + Math.floor(run.rng() * 100);
 }
 
-/** Two distinct recruit offers, drawn from a pool that grows region by region. */
+/**
+ * Distinct recruit offers, drawn from a pool that grows region by region. Two
+ * by default; Beginner's Luck adds a third (capped at what the pool can spare).
+ */
 export function offerRecruits(run: RunState): Kind[] {
   const r = regionOf(run.fightIndex);
   const pool: Kind[] =
@@ -647,10 +653,13 @@ export function offerRecruits(run: RunState): Kind[] {
           : r === 2
             ? ['slink', 'rumble']
             : ['slink', 'rumble', 'duchess'];
-  const a = pool[Math.floor(run.rng() * pool.length)];
-  let b = a;
-  while (b === a) b = pool[Math.floor(run.rng() * pool.length)];
-  return [a, b];
+  const want = Math.min(run.trinkets.includes('luck') ? 3 : 2, pool.length);
+  const bag = [...pool];
+  const out: Kind[] = [];
+  while (out.length < want && bag.length) {
+    out.push(bag.splice(Math.floor(run.rng() * bag.length), 1)[0]);
+  }
+  return out;
 }
 
 export function recruit(run: RunState, kind: Kind) {
@@ -659,26 +668,72 @@ export function recruit(run: RunState, kind: Kind) {
 
 // ---------- trinkets ----------
 
-export type TrinketId = 'cloak' | 'whistle' | 'breakfast';
+export type TrinketId =
+  | 'cloak'
+  | 'whistle'
+  | 'breakfast'
+  | 'ward'
+  | 'riser'
+  | 'luck'
+  | 'dew'
+  | 'map'
+  | 'trail';
 
-export const TRINKETS: Record<TrinketId, { title: string; blurb: string }> = {
+/** `region` gates a trinket behind ladder progress — new relics keep surfacing. */
+export const TRINKETS: Record<TrinketId, { title: string; blurb: string; region: number }> = {
   cloak: {
     title: 'Dandelion Cloak',
     blurb: 'Once each clearing, a caught friend (never the Keeper) drifts safely back to your home row instead.',
+    region: 0,
   },
   whistle: {
     title: 'Acorn Whistle',
     blurb: 'Every Hopper can also take a plain one-step move, any direction.',
+    region: 0,
   },
   breakfast: {
     title: 'Second Breakfast',
     blurb: 'Once each clearing, your first move comes with a second helping — an extra move that can’t snatch anything.',
+    region: 0,
+  },
+  ward: {
+    title: 'Bramble Ward',
+    blurb: 'Once each clearing, the first friend the bramble would catch — the Keeper too — shrugs it off; the attacker recoils.',
+    region: 0,
+  },
+  riser: {
+    title: 'Early Riser',
+    blurb: 'Your opening move each clearing is followed by a free stretch — an extra, non-snatching move. Stacks with Second Breakfast for two.',
+    region: 0,
+  },
+  luck: {
+    title: 'Beginner’s Luck',
+    blurb: 'Every recruit shows a third friend to choose from.',
+    region: 1,
+  },
+  map: {
+    title: 'Wanderer’s Map',
+    blurb: 'Every campfire lays out two comforts from the wilds to pick between, not one.',
+    region: 1,
+  },
+  dew: {
+    title: 'Morning Dew',
+    blurb: 'Friends caught in a fight are never left shaken — they rejoin the band ready for the next clearing.',
+    region: 2,
+  },
+  trail: {
+    title: 'Trailmarker',
+    blurb: 'The bramble is slower to reinforce — the spread clock gives you three extra turns before it stirs.',
+    region: 2,
   },
 };
 
-/** Up to n distinct trinkets the run doesn't own yet. */
+/** Up to n distinct trinkets the run doesn't own yet and has unlocked by region. */
 export function offerTrinkets(run: RunState, n: number): TrinketId[] {
-  const pool = (Object.keys(TRINKETS) as TrinketId[]).filter((t) => !run.trinkets.includes(t));
+  const r = regionOf(run.fightIndex);
+  const pool = (Object.keys(TRINKETS) as TrinketId[]).filter(
+    (t) => !run.trinkets.includes(t) && TRINKETS[t].region <= r,
+  );
   const out: TrinketId[] = [];
   while (out.length < n && pool.length) {
     out.push(pool.splice(Math.floor(run.rng() * pool.length), 1)[0]);
@@ -688,6 +743,79 @@ export function offerTrinkets(run: RunState, n: number): TrinketId[] {
 
 export function takeTrinket(run: RunState, id: TrinketId) {
   if (!run.trinkets.includes(id)) run.trinkets.push(id);
+}
+
+// ---------- movement upgrades ----------
+
+/**
+ * Each upgrade bends one kind's movement. `kind` gates both who it helps and
+ * when it's offered (only if you have that critter); `region` gates it behind
+ * ladder progress so new tricks keep surfacing as you push deeper.
+ */
+export const UPGRADES: Record<UpgradeId, { title: string; blurb: string; kind: Kind; region: number }> = {
+  thornstep: {
+    title: 'Thornstep',
+    blurb: 'Every Sprout can waddle one step diagonally forward onto open ground — not just poke.',
+    kind: 'sprout',
+    region: 0,
+  },
+  rootgrip: {
+    title: 'Rootgrip',
+    blurb: 'Every Sprout can take one plain step straight back. A shy retreat, never a snatch.',
+    kind: 'sprout',
+    region: 1,
+  },
+  springheel: {
+    title: 'Springheel',
+    blurb: 'Every Hopper can also make a short one-step diagonal hop, in addition to its long leap.',
+    kind: 'hopper',
+    region: 1,
+  },
+  sidestep: {
+    title: 'Sidestep',
+    blurb: 'Every Slink can also step one square straight — the only way it ever changes which colour it walks.',
+    kind: 'slink',
+    region: 1,
+  },
+  underbrush: {
+    title: 'Underbrush',
+    blurb: 'A Slink’s diagonal glide slips right over the first friend in its lane and keeps going.',
+    kind: 'slink',
+    region: 2,
+  },
+  pivot: {
+    title: 'Pivot',
+    blurb: 'Every Rumble can also take one short diagonal step, off its straight lanes.',
+    kind: 'rumble',
+    region: 2,
+  },
+};
+
+/** Which upgrades a companion of `kind` currently carries (run-level, by kind). */
+export function upgradesForKind(run: RunState, kind: Kind): UpgradeId[] {
+  return run.upgrades.filter((u) => UPGRADES[u].kind === kind);
+}
+
+/**
+ * Up to n distinct upgrades the run can actually use right now: not already
+ * owned, unlocked by region, and for a kind the band currently fields. Offering
+ * a Slink trick to a band with no Slink would just be a dead card.
+ */
+export function offerUpgrades(run: RunState, n: number): UpgradeId[] {
+  const r = regionOf(run.fightIndex);
+  const have = new Set(run.companions.map((c) => c.kind));
+  const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter(
+    (u) => !run.upgrades.includes(u) && UPGRADES[u].region <= r && have.has(UPGRADES[u].kind),
+  );
+  const out: UpgradeId[] = [];
+  while (out.length < n && pool.length) {
+    out.push(pool.splice(Math.floor(run.rng() * pool.length), 1)[0]);
+  }
+  return out;
+}
+
+export function takeUpgrade(run: RunState, id: UpgradeId) {
+  if (!run.upgrades.includes(id)) run.upgrades.push(id);
 }
 
 // ---------- camp ----------
@@ -789,9 +917,21 @@ export function buildFightConfig(run: RunState): BuiltFight {
     if (x < 0 || x >= spec.w) return;
     if (c.kind === 'slink') slinkColors.push(colorOf(offset));
     const whistled = run.trinkets.includes('whistle') && c.kind === 'hopper';
-    friends.push({ kind: c.kind, x, y, spry: c.spry || whistled || undefined });
+    const ups = upgradesForKind(run, c.kind);
+    friends.push({
+      kind: c.kind,
+      x,
+      y,
+      spry: c.spry || whistled || undefined,
+      upgrades: ups.length ? ups : undefined,
+    });
     lineup.push(i);
   });
+  // Trailmarker slows the reinforcement clock: three extra turns before it stirs.
+  const spread =
+    spec.spread && run.trinkets.includes('trail')
+      ? { ...spec.spread, after: spec.spread.after + 3 }
+      : spec.spread;
   return {
     cfg: {
       name: spec.name,
@@ -801,10 +941,12 @@ export function buildFightConfig(run: RunState): BuiltFight {
       enemies: placeEnemies(spec, run.rng, friends),
       actsPerTurn: spec.acts,
       dials: scaleDials(spec.dials, run.difficulty ?? 1),
-      spread: spec.spread,
+      spread,
       cloak: run.trinkets.includes('cloak'),
       secondBreakfast: run.trinkets.includes('breakfast'),
       whistle: run.trinkets.includes('whistle'),
+      ward: run.trinkets.includes('ward'),
+      riser: run.trinkets.includes('riser'),
     },
     lineup,
   };
@@ -815,8 +957,10 @@ export function buildFightConfig(run: RunState): BuiltFight {
  * become shaken (sit out the next fight); everyone who sat out recovers.
  */
 export function afterFightWon(run: RunState, lineup: number[], aliveCompanionIdx: Set<number>) {
+  // Morning Dew spares the shakes entirely — a caught friend just walks it off.
+  const dew = run.trinkets.includes('dew');
   run.companions.forEach((c, i) => {
-    c.shaken = lineup.includes(i) ? !aliveCompanionIdx.has(i) : false;
+    c.shaken = !dew && lineup.includes(i) ? !aliveCompanionIdx.has(i) : false;
   });
   run.fightIndex++;
   if (run.fightIndex >= run.fights.length) run.status = 'won';

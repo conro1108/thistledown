@@ -37,8 +37,12 @@ Camps before bosses; region-shaped recruit pools; roster cap 6.
 - Board size.
 
 **Progression items** — Camps (Warm mash heals shaken / Honeycake makes one companion
-spry). Trinkets (Dandelion Cloak, Acorn Whistle, Second Breakfast); free pick after
-clearing 1, more at camps.
+spry). Trinkets, region-gated so new relics keep surfacing (Dandelion Cloak, Acorn
+Whistle, Second Breakfast, Bramble Ward, Early Riser, Beginner's Luck, Wanderer's Map,
+Morning Dew, Trailmarker); free pick after clearing 1, more at camps. **Movement
+upgrades** — run-level, keyed by kind, offered at campfires: Thornstep/Rootgrip (Sprout),
+Springheel (Hopper), Sidestep/Underbrush (Slink), Pivot (Rumble). Each is a variant of
+the real piece, gated behind region + owning that kind.
 
 **Shared choice-scene UI** — recruits/camp/trinkets/honeycake/promotion all use one
 card-picker: tap to study (sprite, blurb, 5×5 movement preview), explicit confirm.

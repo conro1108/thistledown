@@ -34,6 +34,7 @@ export function soundForEvent(type: FightEvent['type']): SoundName {
     case 'tempo':
     case 'flee':
     case 'cloaked':
+    case 'warded':
       return 'sparkle';
     case 'cornered':
       return 'fanfare';

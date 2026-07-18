@@ -11,11 +11,13 @@ import {
   newRun,
   offerRecruits,
   offerTrinkets,
+  offerUpgrades,
   recruit,
   REGION_NAMES,
   regionOf,
   scaleDials,
   takeTrinket,
+  takeUpgrade,
 } from './run';
 import type { FightState, Piece } from './types';
 
@@ -191,6 +193,78 @@ describe('run', () => {
     const { lineup } = buildFightConfig(run);
     afterFightWon(run, lineup, new Set(lineup));
     expect(run.status).toBe('won');
+  });
+
+  it('trinket offers are region-gated: late relics stay hidden until their region', () => {
+    const early = newRun(4); // region 0
+    const wide = offerTrinkets(early, 9); // ask for everything the region can spare
+    expect(wide).toContain('ward');
+    expect(wide).not.toContain('luck'); // region 1
+    expect(wide).not.toContain('dew'); // region 2
+    const deep = newRun(4);
+    deep.fightIndex = 8; // region 2 — everything is unlocked now
+    expect(offerTrinkets(deep, 9)).toEqual(
+      expect.arrayContaining(['cloak', 'ward', 'luck', 'map', 'dew', 'trail']),
+    );
+  });
+
+  it('Beginner’s Luck adds a third recruit when the pool can spare one', () => {
+    const run = newRun(9);
+    run.fightIndex = 2; // region 0, four kinds in the pool
+    expect(offerRecruits(run)).toHaveLength(2);
+    takeTrinket(run, 'luck');
+    expect(offerRecruits(run)).toHaveLength(3);
+  });
+
+  it('Morning Dew spares fielded friends the shakes', () => {
+    const run = newRun(7);
+    const { lineup } = buildFightConfig(run);
+    const caught = lineup[1]; // a fielded companion the fight "captured"
+    takeTrinket(run, 'dew');
+    afterFightWon(run, lineup, new Set(lineup.filter((i) => i !== caught)));
+    expect(run.companions[caught].shaken).toBe(false);
+  });
+
+  it('Trailmarker delays the spread clock by three turns', () => {
+    const base = newRun(5);
+    const before = buildFightConfig(base).cfg.spread!.after;
+    takeTrinket(base, 'trail');
+    expect(buildFightConfig(base).cfg.spread!.after).toBe(before + 3);
+  });
+
+  it('Bramble Ward and Early Riser ride onto the fight config', () => {
+    const run = newRun(5);
+    takeTrinket(run, 'ward');
+    takeTrinket(run, 'riser');
+    const cfg = buildFightConfig(run).cfg;
+    expect(cfg.ward).toBe(true);
+    expect(cfg.riser).toBe(true);
+  });
+});
+
+describe('movement upgrades (run)', () => {
+  it('offers are gated by region and by whether you field that kind', () => {
+    const run = newRun(3); // sprout, sprout, hopper — region 0
+    expect(offerUpgrades(run, 9)).toEqual(['thornstep']); // only the region-0 Sprout trick
+    run.fightIndex = 4; // region 1 unlocks more
+    const r1 = offerUpgrades(run, 9);
+    expect(r1).toEqual(expect.arrayContaining(['thornstep', 'rootgrip', 'springheel']));
+    expect(r1).not.toContain('sidestep'); // no Slink in the band → dead card, withheld
+    recruit(run, 'slink');
+    expect(offerUpgrades(run, 9)).toContain('sidestep');
+  });
+
+  it('an owned upgrade is never offered again and rides onto every companion of its kind', () => {
+    const run = newRun(3);
+    takeUpgrade(run, 'thornstep');
+    expect(offerUpgrades(run, 9)).not.toContain('thornstep');
+    const { cfg, lineup } = buildFightConfig(run);
+    // every fielded Sprout carries it; the Hopper does not
+    lineup.forEach((compIdx, j) => {
+      const sp = cfg.friends[j + 1];
+      if (run.companions[compIdx].kind === 'sprout') expect(sp.upgrades).toContain('thornstep');
+      else expect(sp.upgrades).toBeUndefined();
+    });
   });
 });
 

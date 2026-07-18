@@ -1,4 +1,4 @@
-import type { FightState, Kind, Piece, Vec } from './types';
+import type { FightState, Kind, Piece, UpgradeId, Vec } from './types';
 
 const ORTHO: Vec[] = [
   { x: 1, y: 0 },
@@ -44,6 +44,24 @@ const MOVERS: Record<Kind, Mover> = {
   gloom: { slides: ALL8 },
   heart: { steps: ALL8 },
 };
+
+function hasUpgrade(p: Piece, u: UpgradeId): boolean {
+  return p.upgrades?.includes(u) ?? false;
+}
+
+/**
+ * Extra *step* directions a piece's upgrades graft on — full moves that can
+ * capture and that genuinely threaten (unlike a pawn's quiet advance). Each is
+ * gated to the kind it belongs to so an upgrade only bends its own critter.
+ */
+function upgradeSteps(p: Piece): Vec[] {
+  if (!p.upgrades) return [];
+  const out: Vec[] = [];
+  if (p.kind === 'hopper' && hasUpgrade(p, 'springheel')) out.push(...DIAG);
+  if (p.kind === 'slink' && hasUpgrade(p, 'sidestep')) out.push(...ORTHO);
+  if (p.kind === 'rumble' && hasUpgrade(p, 'pivot')) out.push(...DIAG);
+  return out;
+}
 
 /**
  * Whether p may land on (capture) occ. The Bramble Heart can never be landed
@@ -112,7 +130,16 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
       } else {
         const occ = pieceAt(s, x, y);
         if (occ && canLand(p, occ)) out.push({ x, y });
+        // Thornstep: advance diagonally forward onto empty ground too. A quiet
+        // step, not a new bite — the diagonal is already threatened above.
+        else if (!occ && hasUpgrade(p, 'thornstep')) out.push({ x, y });
       }
+    }
+    // Rootgrip: one plain step straight back, never a capture (a shy retreat).
+    if (!threats && hasUpgrade(p, 'rootgrip')) {
+      const bx = p.x;
+      const by = p.y - dy;
+      if (inBounds(s, bx, by) && !pieceAt(s, bx, by)) out.push({ x: bx, y: by });
     }
     return dedup(out);
   }
@@ -128,12 +155,23 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
   }
 
   if (m.slides) {
+    // Underbrush: a Slink's diagonal glide slips over the first friendly plant
+    // in the lane and keeps going. Only the one — a second body still stops it.
+    const canHop = p.kind === 'slink' && hasUpgrade(p, 'underbrush');
     for (const d of m.slides) {
+      let hopped = false;
       let x = p.x + d.x;
       let y = p.y + d.y;
       while (inBounds(s, x, y)) {
         const occ = pieceAt(s, x, y);
         if (occ) {
+          if (occ.side === p.side && canHop && !hopped) {
+            if (threats) out.push({ x, y }); // still covers the friend it leaps
+            hopped = true;
+            x += d.x;
+            y += d.y;
+            continue;
+          }
           if (threats || canLand(p, occ)) out.push({ x, y });
           break;
         }
@@ -142,6 +180,15 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
         y += d.y;
       }
     }
+  }
+
+  // extra step-directions grafted on by upgrades (springheel / sidestep / pivot)
+  for (const d of upgradeSteps(p)) {
+    const x = p.x + d.x;
+    const y = p.y + d.y;
+    if (!inBounds(s, x, y)) continue;
+    const occ = pieceAt(s, x, y);
+    if (threats || !occ || canLand(p, occ)) out.push({ x, y });
   }
 
   return dedup(out);

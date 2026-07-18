@@ -19,6 +19,21 @@ export type Kind =
 
 export type Side = 'friend' | 'bramble';
 
+/**
+ * Movement upgrades: variant moves grafted onto a real piece. Each is a bend
+ * of the base pattern (a Sprout that advances diagonally, a Slink that changes
+ * colour) — seeing the piece bent is how players end up understanding the
+ * straight version. Run-level and keyed by kind: owning one lifts every
+ * companion of that kind, exactly like the Acorn Whistle lifts every Hopper.
+ */
+export type UpgradeId =
+  | 'thornstep' // sprout: may advance one step diagonally forward (not just capture)
+  | 'rootgrip' // sprout: may also step one square straight back
+  | 'springheel' // hopper: may also step one square diagonally
+  | 'sidestep' // slink: may also step one square orthogonally (change colour)
+  | 'underbrush' // slink: its diagonal glide slips over the first friendly in the way
+  | 'pivot'; // rumble: may also step one square diagonally
+
 export interface Piece {
   id: number;
   side: Side;
@@ -27,6 +42,8 @@ export interface Piece {
   y: number;
   /** honeycake'd: may also take a plain (non-capturing) one-step move */
   spry?: boolean;
+  /** movement upgrades this piece carries (see UpgradeId) */
+  upgrades?: UpgradeId[];
   /** commits to two squares and takes whichever is better when it moves */
   fickle?: boolean;
   /** commits like anyone else, but the player isn't shown the arrow */
@@ -75,6 +92,7 @@ export interface FightEvent {
     | 'shaken'
     | 'blocked'
     | 'cloaked'
+    | 'warded' // the Bramble Ward shrugged off a capture; the attacker recoiled
     | 'cornered'
     | 'tempo'
     | 'flee'
@@ -130,6 +148,8 @@ export interface FightState {
   pendingPromotion: number | null;
   /** Dandelion Cloak charges left this fight */
   cloakLeft: number;
+  /** Bramble Ward charges left this fight (negates a capture, Keeper included) */
+  wardLeft: number;
   /** Second Breakfast: extra player moves banked for this fight */
   freeMoves: number;
   /** mid-extra-move: the Second Breakfast step is a stretch, not a snatch — no captures */

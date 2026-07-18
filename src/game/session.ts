@@ -16,13 +16,15 @@ import {
   newRun,
   offerRecruits,
   offerTrinkets,
+  offerUpgrades,
   recruit,
   ROSTER_CAP,
   takeTrinket,
+  takeUpgrade,
   type RunState,
   type TrinketId,
 } from './run';
-import type { FightState, Kind, Vec } from './types';
+import type { FightState, Kind, UpgradeId, Vec } from './types';
 
 /**
  * The whole run as a decision log. Every choice — including the implicit
@@ -39,6 +41,7 @@ export type LogEntry =
   | { t: 'recruit'; kind: Kind }
   | { t: 'skip' }
   | { t: 'trinket'; id: TrinketId }
+  | { t: 'upgrade'; id: UpgradeId }
   | { t: 'heal' }
   | { t: 'snack'; idx: number }
   | { t: 'rest' };
@@ -63,6 +66,8 @@ export interface Session {
   /** offers drawn by the session (so display never consumes RNG) */
   recruitOffers: Kind[] | null;
   trinketOffers: TrinketId[];
+  /** movement upgrades on offer at the current campfire (so display never rolls RNG) */
+  upgradeOffers: UpgradeId[];
   log: LogEntry[];
 }
 
@@ -75,6 +80,7 @@ export function newSession(seed: number): Session {
     resolveDue: false,
     recruitOffers: null,
     trinketOffers: [],
+    upgradeOffers: [],
     log: [],
   };
 }
@@ -175,29 +181,41 @@ function step(s: Session, e: LogEntry): boolean {
     case 'trinket': {
       if ((s.stage !== 'found' && s.stage !== 'camp') || !s.trinketOffers.includes(e.id)) return false;
       takeTrinket(s.run, e.id);
-      s.trinketOffers = [];
-      s.stage = 'intro';
+      leaveCamp(s);
+      return true;
+    }
+    case 'upgrade': {
+      if (s.stage !== 'camp' || !s.upgradeOffers.includes(e.id)) return false;
+      takeUpgrade(s.run, e.id);
+      leaveCamp(s);
       return true;
     }
     case 'heal': {
       if (s.stage !== 'camp') return false;
       campHeal(s.run);
-      s.stage = 'intro';
+      leaveCamp(s);
       return true;
     }
     case 'snack': {
       const c = s.run.companions[e.idx];
       if (s.stage !== 'camp' || !c || c.spry) return false;
       campSnack(s.run, e.idx);
-      s.stage = 'intro';
+      leaveCamp(s);
       return true;
     }
     case 'rest': {
       if (s.stage !== 'camp') return false;
-      s.stage = 'intro';
+      leaveCamp(s);
       return true;
     }
   }
+}
+
+/** Taking any one comfort leaves the campfire: clear the offers, march on. */
+function leaveCamp(s: Session) {
+  s.trinketOffers = [];
+  s.upgradeOffers = [];
+  s.stage = 'intro';
 }
 
 /** After a player move or promotion settles: promotion, end, or free move. */
@@ -251,7 +269,9 @@ function leavePost(s: Session) {
     }
   }
   if (campDue(s.run)) {
-    s.trinketOffers = offerTrinkets(s.run, 1);
+    // Wanderer's Map lays out two wild comforts to choose between instead of one.
+    s.trinketOffers = offerTrinkets(s.run, s.run.trinkets.includes('map') ? 2 : 1);
+    s.upgradeOffers = offerUpgrades(s.run, 1);
     s.stage = 'camp';
     return;
   }

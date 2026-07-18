@@ -1,11 +1,13 @@
 import { inBounds, isPawn, isSlider, movesFor, pieceAt, threatsFor } from './board';
-import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Telegraph, Vec } from './types';
+import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Telegraph, UpgradeId, Vec } from './types';
 
 export interface Spawn {
   kind: Kind;
   x: number;
   y: number;
   spry?: boolean;
+  /** movement upgrades (friend-only), applied by kind in buildFightConfig */
+  upgrades?: UpgradeId[];
   /** telegraphs two options, resolves the better one (later-region spice) */
   fickle?: boolean;
   /** shrouded: commits without showing the player its arrow */
@@ -48,6 +50,10 @@ export interface FightConfig {
   cloak?: boolean;
   secondBreakfast?: boolean;
   whistle?: boolean;
+  /** Bramble Ward: negate the first capture this clearing (Keeper included) */
+  ward?: boolean;
+  /** Early Riser: bank a second first-move stretch on top of Second Breakfast */
+  riser?: boolean;
 }
 
 export function createFight(cfg: FightConfig, rng: Rng): FightState {
@@ -74,7 +80,9 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     events: [],
     pendingPromotion: null,
     cloakLeft: cfg.cloak ? 1 : 0,
-    freeMoves: cfg.secondBreakfast ? 1 : 0,
+    wardLeft: cfg.ward ? 1 : 0,
+    // Second Breakfast banks one first-move stretch; Early Riser banks another (they stack).
+    freeMoves: (cfg.secondBreakfast ? 1 : 0) + (cfg.riser ? 1 : 0),
     freeMoveActive: false,
     whistle: !!cfg.whistle,
   };
@@ -402,7 +410,7 @@ function prize(s: FightState, v: Vec | null): number {
   return occ && occ.side === 'friend' ? PIECE_VALUE[occ.kind] : 0;
 }
 
-/** Land e on `to`, catching (or cloaking) any friend standing there. */
+/** Land e on `to`, catching (or sparing) any friend standing there. */
 function land(s: FightState, e: Piece, to: Vec) {
   const occ = pieceAt(s, to.x, to.y);
   if (occ && occ.side === 'friend') {
@@ -414,6 +422,12 @@ function land(s: FightState, e: Piece, to: Vec) {
       occ.x = spot.x;
       occ.y = spot.y;
       s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind });
+    } else if (s.wardLeft > 0) {
+      // Bramble Ward: the capture is shrugged off — the friend stands (the Keeper
+      // too), and the attacker recoils rather than completing its move.
+      s.wardLeft--;
+      s.events.push({ type: 'warded', at: { x: to.x, y: to.y }, kind: occ.kind });
+      return;
     } else {
       s.pieces = s.pieces.filter((p) => p.id !== occ.id);
       s.events.push({ type: 'shaken', at: { x: to.x, y: to.y }, kind: occ.kind });

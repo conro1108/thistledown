@@ -1,7 +1,16 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
 import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
-import { KIND_INFO, REGION_NAMES, regionOf, scaleDials, TRINKETS, type RunState, type TrinketId } from './game/run';
+import {
+  KIND_INFO,
+  REGION_NAMES,
+  regionOf,
+  scaleDials,
+  TRINKETS,
+  UPGRADES,
+  type RunState,
+  type TrinketId,
+} from './game/run';
 import {
   apply,
   movesThisClearing,
@@ -12,7 +21,7 @@ import {
   type LogEntry,
   type Session,
 } from './game/session';
-import type { FightState, Kind, Telegraph, Vec } from './game/types';
+import type { FightState, Kind, Telegraph, UpgradeId, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
 import { iconEl, iconHTML, type IconName } from './render/icons';
 import { draw, TILE, type FX, type PosOverrides } from './render/scene';
@@ -24,6 +33,22 @@ const TRINKET_ICONS: Record<TrinketId, IconName> = {
   cloak: 'cloak',
   whistle: 'acorn',
   breakfast: 'pancakes',
+  ward: 'leaf',
+  riser: 'teacup',
+  luck: 'sparkle',
+  dew: 'blossom',
+  map: 'scales',
+  trail: 'fern',
+};
+
+/** Each movement upgrade's pixel icon — a card face for the campfire. */
+const UPGRADE_ICONS: Record<UpgradeId, IconName> = {
+  thornstep: 'sprout',
+  rootgrip: 'leaf',
+  springheel: 'acorn',
+  sidestep: 'fern',
+  underbrush: 'bloom',
+  pivot: 'scales',
 };
 
 /** A one-line move phrase for the compact recruit cards (KIND_INFO blurbs run long). */
@@ -40,9 +65,9 @@ const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing s
 const PAUSE_MS = 340; // beat after your move, before the bramble acts
 const TWEEN_MS = 190; // how long their slide/leap takes to draw
 const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
-// v4: four regions of four, retuned dials/spread, bramble promotion, true-mate
-// cornering — older decision logs no longer replay faithfully, so let them go
-const SAVE_KEY = 'overgrown.save.v4';
+// v5: movement upgrades + expanded, region-gated trinkets shift the run's RNG
+// draw order, so older decision logs no longer replay faithfully — let them go
+const SAVE_KEY = 'overgrown.save.v5';
 const SCORES_KEY = 'overgrown.scores.v1';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -658,6 +683,17 @@ function campStop() {
       detail: `Spotted at the edge of the firelight. ${TRINKETS[id].blurb}`,
       fn: () => {
         doEntry({ t: 'trinket', id });
+        stageUi();
+      },
+    });
+  }
+  for (const id of sess.upgradeOffers) {
+    choices.push({
+      icon: UPGRADE_ICONS[id],
+      label: UPGRADES[id].title,
+      detail: `A trick learned by the fire. ${UPGRADES[id].blurb}`,
+      fn: () => {
+        doEntry({ t: 'upgrade', id });
         stageUi();
       },
     });
@@ -1405,6 +1441,11 @@ function drainEvents() {
       blockedNote = `The Dandelion Cloak whisks ${
         ev.kind === 'keeper' ? 'the Keeper' : `the ${KIND_INFO[ev.kind].title}`
       } safely home! ${iconHTML('cloak')}`;
+    } else if (ev.type === 'warded') {
+      fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      blockedNote = `The Bramble Ward turns the blow aside — ${
+        ev.kind === 'keeper' ? 'the Keeper' : `your ${KIND_INFO[ev.kind].title}`
+      } stands unshaken! ${iconHTML('leaf')}`;
     } else {
       fx.push({ at: ev.at, kind: ev.type === 'capture' ? 'poof' : 'shaken', t: 0 });
     }

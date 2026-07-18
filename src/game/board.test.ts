@@ -103,3 +103,81 @@ describe('movement', () => {
     expect(movesFor(s, at(s, 0, 0))).toHaveLength(3);
   });
 });
+
+describe('movement upgrades', () => {
+  it('thornstep: sprout advances diagonally forward onto empty; attack unchanged', () => {
+    const s = fight(
+      [{ kind: 'sprout', x: 2, y: 4, upgrades: ['thornstep'] }, { kind: 'keeper', x: 5, y: 5 }],
+      [{ kind: 'thistle', x: 2, y: 3 }],
+    );
+    const p = at(s, 2, 4);
+    const moves = movesFor(s, p);
+    expect(has(moves, 1, 3)).toBe(true); // diagonal advance onto empty
+    expect(has(moves, 3, 3)).toBe(true);
+    expect(has(moves, 2, 3)).toBe(false); // still no forward capture
+    // it still only *threatens* the two forward diagonals — thornstep is a step, not a bite
+    expect(threatsFor(s, p).length).toBe(2);
+  });
+
+  it('rootgrip: sprout steps one square straight back onto empty, never a capture', () => {
+    const s = fight(
+      [{ kind: 'sprout', x: 2, y: 4, upgrades: ['rootgrip'] }, { kind: 'keeper', x: 5, y: 5 }],
+      [{ kind: 'thistle', x: 2, y: 5 }],
+    );
+    const moves = movesFor(s, at(s, 2, 4));
+    expect(has(moves, 2, 3)).toBe(true); // forward still works
+    expect(has(moves, 2, 5)).toBe(false); // rootgrip won't capture straight back
+  });
+
+  it('springheel: hopper gains a short diagonal step it can capture on', () => {
+    const s = fight(
+      [{ kind: 'hopper', x: 2, y: 2, upgrades: ['springheel'] }, { kind: 'keeper', x: 5, y: 5 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+    );
+    const p = at(s, 2, 2);
+    const moves = movesFor(s, p);
+    expect(has(moves, 1, 1)).toBe(true); // diagonal step onto empty
+    expect(has(moves, 3, 3)).toBe(true); // diagonal step capture
+    expect(has(moves, 0, 1)).toBe(true); // and its usual L is intact
+    expect(has(threatsFor(s, p), 1, 1)).toBe(true); // the new step is a real threat
+  });
+
+  it('sidestep: slink can step one square straight, changing its colour', () => {
+    const s = fight(
+      [{ kind: 'slink', x: 2, y: 2, upgrades: ['sidestep'] }, { kind: 'keeper', x: 5, y: 5 }],
+      [{ kind: 'thistle', x: 2, y: 1 }],
+    );
+    const p = at(s, 2, 2); // (2+2) even — a "dark" square
+    const moves = movesFor(s, p);
+    expect(has(moves, 2, 3)).toBe(true); // orthogonal step lands on the other colour
+    expect(has(moves, 2, 1)).toBe(true); // and can capture straight
+    expect(has(threatsFor(s, p), 2, 1)).toBe(true);
+  });
+
+  it('underbrush: slink glides over the first friend, stops at the second', () => {
+    const s = fight(
+      [
+        { kind: 'slink', x: 2, y: 5, upgrades: ['underbrush'] },
+        { kind: 'sprout', x: 3, y: 4 },
+        { kind: 'sprout', x: 5, y: 2 },
+        { kind: 'keeper', x: 0, y: 0 },
+      ],
+      [{ kind: 'thistle', x: 1, y: 0 }],
+    );
+    const moves = movesFor(s, at(s, 2, 5));
+    expect(has(moves, 4, 3)).toBe(true); // reached past the first friend
+    expect(has(moves, 3, 4)).toBe(false); // can't land on the friend it hopped
+    expect(has(moves, 5, 2)).toBe(false); // second friend genuinely blocks it
+  });
+
+  it('pivot: rumble gains a short diagonal step off its straight lanes', () => {
+    const s = fight(
+      [{ kind: 'rumble', x: 2, y: 2, upgrades: ['pivot'] }, { kind: 'keeper', x: 5, y: 5 }],
+      [{ kind: 'thistle', x: 3, y: 3 }],
+    );
+    const moves = movesFor(s, at(s, 2, 2));
+    expect(has(moves, 1, 1)).toBe(true); // diagonal step onto empty
+    expect(has(moves, 3, 3)).toBe(true); // diagonal step capture
+    expect(has(moves, 2, 5)).toBe(true); // straight lanes still work
+  });
+});
