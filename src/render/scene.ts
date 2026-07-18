@@ -69,9 +69,20 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       // the last square before an own-plant / the board edge.
       if (isSlider(e.kind)) {
         const lane = sliderLane(s, from, aim);
-        const col = lane.bite ? '#e05252' : '#7a5fae';
-        arrow(ctx, from, lane.end, col);
-        corners(ctx, lane.end.x, lane.end.y, col);
+        if (lane.bite) {
+          // a friend sits on the lane now — the slider takes the first one it
+          // reaches, so the arrow lands where it bites.
+          arrow(ctx, from, lane.end, '#e05252');
+          corners(ctx, lane.end.x, lane.end.y, '#e05252');
+        } else {
+          // quiet move: it *covers* the whole lane but will actually step onto
+          // the committed square `aim`. Arrow to where it moves; wash the
+          // overshoot it still bites (the "could pounce here" read) so the
+          // whole rank/file/diagonal still reads as dangerous.
+          arrow(ctx, from, aim, '#7a5fae');
+          corners(ctx, aim.x, aim.y, '#7a5fae');
+          laneWash(ctx, aim, lane.end);
+        }
         continue;
       }
       const occ = pieceAt(s, aim.x, aim.y);
@@ -192,6 +203,29 @@ function sliderLane(s: FightState, from: Vec, to: Vec): { end: Vec; bite: Vec | 
     y += dy;
   }
   return { end, bite };
+}
+
+/**
+ * Faint "I also cover this" wash over the squares a quiet slider overshoots —
+ * from the square past its committed landing out to the lane's end. Mirrors the
+ * hover threat wash (soft fill + center dot) so it reads as "could pounce here,"
+ * distinct from the arrow's "will move here."
+ */
+function laneWash(ctx: CanvasRenderingContext2D, from: Vec, end: Vec) {
+  const dx = Math.sign(end.x - from.x);
+  const dy = Math.sign(end.y - from.y);
+  if (dx === 0 && dy === 0) return;
+  let x = from.x + dx;
+  let y = from.y + dy;
+  for (;;) {
+    ctx.fillStyle = 'rgba(122, 95, 174, 0.20)';
+    ctx.fillRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2);
+    ctx.fillStyle = '#7a5fae';
+    ctx.fillRect(x * TILE + 7, y * TILE + 7, 2, 2);
+    if (x === end.x && y === end.y) break;
+    x += dx;
+    y += dy;
+  }
 }
 
 function corners(ctx: CanvasRenderingContext2D, x: number, y: number, col: string) {
