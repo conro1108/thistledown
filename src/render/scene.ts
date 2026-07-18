@@ -217,7 +217,11 @@ function laneWash(ctx: CanvasRenderingContext2D, from: Vec, end: Vec) {
   if (dx === 0 && dy === 0) return;
   let x = from.x + dx;
   let y = from.y + dy;
-  for (;;) {
+  // Bounded walk. `from`/`end` come from committed telegraphs re-projected onto
+  // a board that may have shifted mid-tween (interpolated origins), so never
+  // trust `x===end` alone to terminate — a non-collinear pair would spin the
+  // whole main thread. Cap at the longest a board lane can be.
+  for (let step = 0; step < 32; step++) {
     ctx.fillStyle = 'rgba(122, 95, 174, 0.20)';
     ctx.fillRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2);
     ctx.fillStyle = '#7a5fae';

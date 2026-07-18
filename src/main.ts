@@ -1511,7 +1511,24 @@ window.addEventListener('resize', sizeCanvas);
 window.addEventListener('orientationchange', () => requestAnimationFrame(sizeCanvas));
 if ('ResizeObserver' in window) new ResizeObserver(sizeCanvas).observe(boardAreaEl);
 
+let frameErrLogged = false;
+
 function frame(time: number) {
+  // A render is pure per frame (it mutates only fx counters), so a thrown draw
+  // must never be allowed to kill the rAF loop — that turns one bad frame into
+  // a permanently frozen board. Catch, log once, and keep the loop alive.
+  try {
+    renderFrame(time);
+  } catch (err) {
+    if (!frameErrLogged) {
+      frameErrLogged = true;
+      console.error('render frame failed — recovering', err);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function renderFrame(time: number) {
   const theme = themeFor(run ? regionOf(run.fightIndex) : 0);
   const ground: [string, string] = [theme.boardA, theme.boardB];
   drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time, theme);
@@ -1541,7 +1558,6 @@ function frame(time: number) {
     for (const f of fx) f.t++;
     fx = fx.filter((f) => f.t < 26);
   }
-  requestAnimationFrame(frame);
 }
 
 function lerp(a: Vec, b: Vec, t: number): Vec {
