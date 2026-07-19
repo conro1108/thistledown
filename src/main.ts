@@ -1478,48 +1478,84 @@ function playOutcome() {
   else if (fight?.status === 'lost') playSfx('lose');
 }
 
+/**
+ * How loudly each enemy-turn note deserves the single hint line when several
+ * events land at once. A trinket save (Ward/Cloak) tops it: it's the one that
+ * explains why a telegraphed capture didn't happen. Loss/threat escalation next,
+ * then your own tactics, then ambient spread chatter.
+ */
+const NOTE_PRI = {
+  saved: 6, // Ward / Cloak turned a capture aside — the confusing one to miss
+  twisted: 5, // a Thistle promoted to a Gloom: a new danger you must see
+  blocked: 4, // you walled a mover — the block tactic, kept loud
+  smothered: 4, // you stamped out a sprout
+  flee: 3, // the Heart bolted from your net
+  sprouted: 2, // a fresh Thistle broke soil
+  stir: 1, // the spread clock ticked
+} as const;
+
 function drainEvents() {
   if (!fight) return;
   // one sound per distinct kind this drain — a triple capture shouldn't triple-pop
   const sounds = new Set<SoundName>();
   for (const ev of fight.events) sounds.add(soundForEvent(ev.type));
   for (const s of sounds) playSfx(s);
+  // Several notable things can share one enemy turn (a Ward shrugging off a bite
+  // AND the Heart fleeing, say), but blockedNote is a single line. Surface the
+  // loudest by priority instead of letting whichever event drained last win — a
+  // trinket that just saved your piece explains an otherwise baffling "it didn't
+  // take me," and must never be buried under a lesser note.
+  let notePri = -1;
+  const note = (pri: number, text: string) => {
+    if (pri > notePri) {
+      notePri = pri;
+      blockedNote = text;
+    }
+  };
   for (const ev of fight.events) {
     if (ev.type === 'blocked') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
-      blockedNote =
+      note(
+        NOTE_PRI.blocked,
         ev.kind === 'heart'
           ? 'The Bramble Heart balks — it won’t step where you’re watching!'
-          : `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`;
+          : `You blocked the ${KIND_INFO[ev.kind].title}! It grumbles and stays put.`,
+      );
     } else if (ev.type === 'tempo') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       tempoKind = ev.kind;
     } else if (ev.type === 'flee') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
-      blockedNote = 'Your trap springs — the Bramble Heart scrambles for safety!';
+      note(NOTE_PRI.flee, 'Your trap springs — the Bramble Heart scrambles for safety!');
     } else if (ev.type === 'cornered') {
       fx.push({ at: ev.at, kind: 'poof', t: 0 });
     } else if (ev.type === 'stir') {
-      blockedNote = 'The soil stirs — the bramble is spreading! Stand on the marked square to smother it.';
+      note(NOTE_PRI.stir, 'The soil stirs — the bramble is spreading! Stand on the marked square to smother it.');
     } else if (ev.type === 'sprouted') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
-      blockedNote = 'A fresh Thistle pushes up through the soil. The bramble won’t wait forever.';
+      note(NOTE_PRI.sprouted, 'A fresh Thistle pushes up through the soil. The bramble won’t wait forever.');
     } else if (ev.type === 'twisted') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
-      blockedNote = 'The Thistle reaches your hedge and twists into a Gloom! Never let one walk the whole meadow.';
+      note(NOTE_PRI.twisted, 'The Thistle reaches your hedge and twists into a Gloom! Never let one walk the whole meadow.');
     } else if (ev.type === 'smothered') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
-      blockedNote = `Smothered underfoot — nothing grows there today! ${iconHTML('daisy')}`;
+      note(NOTE_PRI.smothered, `Smothered underfoot — nothing grows there today! ${iconHTML('daisy')}`);
     } else if (ev.type === 'cloaked') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
-      blockedNote = `The Dandelion Cloak whisks ${
-        ev.kind === 'keeper' ? 'the Keeper' : `the ${KIND_INFO[ev.kind].title}`
-      } safely home! ${iconHTML('cloak')}`;
+      note(
+        NOTE_PRI.saved,
+        `The Dandelion Cloak whisks ${
+          ev.kind === 'keeper' ? 'the Keeper' : `the ${KIND_INFO[ev.kind].title}`
+        } safely home! ${iconHTML('cloak')}`,
+      );
     } else if (ev.type === 'warded') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
-      blockedNote = `The Bramble Ward turns the blow aside — ${
-        ev.kind === 'keeper' ? 'the Keeper' : `your ${KIND_INFO[ev.kind].title}`
-      } stands unshaken! ${iconHTML('leaf')}`;
+      note(
+        NOTE_PRI.saved,
+        `The Bramble Ward turns the blow aside — ${
+          ev.kind === 'keeper' ? 'the Keeper' : `your ${KIND_INFO[ev.kind].title}`
+        } stands unshaken! ${iconHTML('leaf')}`,
+      );
     } else {
       fx.push({ at: ev.at, kind: ev.type === 'capture' ? 'poof' : 'shaken', t: 0 });
     }
