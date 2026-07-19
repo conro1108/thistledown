@@ -359,7 +359,15 @@ function settleCornered(s: FightState): boolean {
  * feeding a piece into its lane or by sliding the target along it.
  */
 function resolveTelegraphs(s: FightState) {
-  for (const t of s.telegraphs) {
+  // Resolve the Heart last, against the *settled* board. Its guards move on the
+  // same turn, and a guard running its committed move can vacate the Heart's one
+  // flight square (or shift a checking lane). If the Heart decided first it could
+  // freeze a beat too early — find every square blocked, give up its move — and
+  // then a defender walks off its escape, stranding it in check at the end of its
+  // own turn. Moving it last lets it flee onto whatever its defenders just cleared.
+  const order = [...s.telegraphs];
+  order.sort((a, b) => heartTurnOrder(s, a) - heartTurnOrder(s, b));
+  for (const t of order) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e) continue;
     if (e.kind === 'heart') {
@@ -386,6 +394,11 @@ function resolveTelegraphs(s: FightState) {
     if (s.status !== 'playing') return;
   }
   s.telegraphs = [];
+}
+
+/** Sort key that pushes the Heart's telegraph to the back of the resolve order. */
+function heartTurnOrder(s: FightState, t: Telegraph): number {
+  return s.pieces.find((p) => p.id === t.pieceId)?.kind === 'heart' ? 1 : 0;
 }
 
 /**

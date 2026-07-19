@@ -371,6 +371,40 @@ describe('fight loop', () => {
     expect(s.status).toBe('playing');
   });
 
+  it('a checked Heart flees onto a square its own guard vacates that same turn', () => {
+    // Mirrors a real game: the player has just checked the Heart at (3,2) with a
+    // slink on (5,4). Every step square is covered except (3,1), which is blocked
+    // by the Heart's own tumbleweed. That guard *could* rescue by blocking (4,3),
+    // so it isn't mate — but its committed telegraph is a quiet hop to (5,0) that
+    // clears (3,1). The guard resolves first, so the Heart must flee onto the
+    // cleared square rather than freeze a beat early and end the turn in check.
+    const s = fight(
+      [
+        { kind: 'keeper', x: 7, y: 7 },
+        { kind: 'slink', x: 5, y: 4 }, // the checker: (5,4)->(4,3)->(3,2)
+        { kind: 'rumble', x: 4, y: 6 }, // covers (4,1),(4,2)
+        { kind: 'rumble', x: 2, y: 6 }, // covers (2,2),(2,3)
+        { kind: 'slink', x: 6, y: 6 }, // covers (3,3)
+      ],
+      [
+        { kind: 'heart', x: 3, y: 2 },
+        { kind: 'tumbleweed', x: 3, y: 1 }, // sits on the Heart's only flight square
+      ],
+      2,
+      8,
+      8,
+    );
+    // committed telegraphs, the Heart listed first on purpose: the guard clears (3,1)
+    s.telegraphs = [
+      { pieceId: idAt(s, 3, 2), to: null },
+      { pieceId: idAt(s, 3, 1), to: { x: 5, y: 0 } }, // a quiet hop, not the (4,3) block
+    ];
+    resolveEnemyTurn(s);
+    expect(s.pieces.find((p) => p.kind === 'tumbleweed')).toMatchObject({ x: 5, y: 0 });
+    expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 3, y: 1 }); // fled, not frozen
+    expect(s.status).toBe('playing');
+  });
+
   it('playerHasMove detects a hemmed-in band (stalemate guard)', () => {
     // 1-wide corridor: keeper boxed by his own sprout, sprout blocked head-on
     // by a thistle it can't capture forward. Nobody on either side can move.
