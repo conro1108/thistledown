@@ -1363,6 +1363,39 @@ function showDevPanel() {
     }),
   );
 
+  // Repro export: the whole run as seed + decision log. This replays to the
+  // exact board — pieces, IDs, RNG and telegraphs — so a bug caught here comes
+  // back precisely in a test. (A dev-dirtied session won't replay; say so.)
+  const repro = devSection(
+    body,
+    devDirty ? 'repro export — ⚠ dev-tuned, will NOT replay' : 'repro export (seed + log → exact replay)',
+  );
+  const payload = () => JSON.stringify({ seed: sess!.run.seed, log: sess!.log });
+  const ta = document.createElement('textarea');
+  ta.className = 'dev-dump';
+  ta.readOnly = true;
+  ta.rows = 4;
+  ta.value = payload();
+  const copyBtn = document.createElement('button');
+  const resetLabel = () => (copyBtn.textContent = '📋 Copy game');
+  resetLabel();
+  copyBtn.onclick = async () => {
+    ta.value = payload();
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length); // iOS: select the whole field
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      ok = true;
+    } catch {
+      /* PWA clipboard can be blocked — fall back to the manual selection below */
+    }
+    copyBtn.textContent = ok ? '✓ Copied' : 'Selected ↑ — copy manually';
+    setTimeout(resetLabel, 1600);
+  };
+  repro.append(copyBtn, ta);
+
   if (fight) {
     const dump = document.createElement('pre');
     dump.className = 'dev-dump';
@@ -1374,7 +1407,7 @@ function showDevPanel() {
         spread: fight.spread ?? null,
         pendingSprout: fight.pendingSprout,
         telegraphs: fight.telegraphs,
-        pieces: fight.pieces.map((p) => `${p.side[0]} ${p.kind} @${p.x},${p.y}${p.spry ? ' spry' : ''}${p.fickle ? ' fickle' : ''}${p.veiled ? ' veiled' : ''}`),
+        pieces: fight.pieces.map((p) => `#${p.id} ${p.side[0]} ${p.kind} @${p.x},${p.y}${p.spry ? ' spry' : ''}${p.fickle ? ' fickle' : ''}${p.veiled ? ' veiled' : ''}`),
       },
       null,
       1,
