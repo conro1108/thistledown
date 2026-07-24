@@ -45,6 +45,17 @@ export interface RegionTheme {
     edge: string;
     scrim: string; // rgba behind the overlay cards
     accent: string; // secondary accent (objective/scene-note tint)
+    /** body + secondary text, tinted to the light this region actually has */
+    ink: string;
+    inkSoft: string;
+    /**
+     * Status banner as [border, background, text]. The player's turn leans
+     * toward the lantern; the bramble's toward whatever colour this region
+     * keeps its shadows in. Won and lost stay global green/red — a victory
+     * should read the same everywhere, however strange the place got.
+     */
+    bannerPlayer: [string, string, string];
+    bannerEnemy: [string, string, string];
   };
 }
 
@@ -81,6 +92,10 @@ const MEADOW: RegionTheme = {
     edge: '#5a5238',
     scrim: 'rgba(24, 20, 10, 0.78)',
     accent: '#a7c86a',
+    ink: '#f0e8d0',
+    inkSoft: '#a89a78',
+    bannerPlayer: ['#8a7a44', '#38321f', '#ffd98a'],
+    bannerEnemy: ['#6b7550', '#2a3024', '#c6d6a0'],
   },
 };
 
@@ -117,6 +132,10 @@ const THICKET: RegionTheme = {
     edge: '#42513f',
     scrim: 'rgba(12, 20, 14, 0.8)',
     accent: '#84b271',
+    ink: '#e2ecdc',
+    inkSoft: '#8ea08a',
+    bannerPlayer: ['#7d7a45', '#2f3222', '#ffe08f'],
+    bannerEnemy: ['#4d6b52', '#1e2c22', '#a5d0ab'],
   },
 };
 
@@ -153,6 +172,10 @@ const TANGLEWOOD: RegionTheme = {
     edge: '#463f5a',
     scrim: 'rgba(14, 10, 22, 0.82)',
     accent: '#b79ae0',
+    ink: '#e8e0f2',
+    inkSoft: '#9d92b2',
+    bannerPlayer: ['#8a7a4e', '#332d22', '#ffd98a'],
+    bannerEnemy: ['#6b5aa0', '#282242', '#cdb8f0'],
   },
 };
 
@@ -189,6 +212,10 @@ const DEEP_BRAMBLE: RegionTheme = {
     edge: '#443e58',
     scrim: 'rgba(10, 8, 16, 0.84)',
     accent: '#8fc460',
+    ink: '#e8e2cf',
+    inkSoft: '#a297b0',
+    bannerPlayer: ['#a68c46', '#322c1d', '#ffd166'],
+    bannerEnemy: ['#7a5fae', '#2c2540', '#cdb8f0'],
   },
 };
 
@@ -225,6 +252,10 @@ const ROTWOOD: RegionTheme = {
     edge: '#564326',
     scrim: 'rgba(20, 12, 6, 0.84)',
     accent: '#c8b24e',
+    ink: '#ece0c6',
+    inkSoft: '#a89578',
+    bannerPlayer: ['#a8873c', '#352a18', '#ffcf6a'],
+    bannerEnemy: ['#6a7a3a', '#262c18', '#c2d47a'],
   },
 };
 
@@ -261,6 +292,10 @@ const WORLDROOT: RegionTheme = {
     edge: '#3a3f58',
     scrim: 'rgba(4, 6, 14, 0.88)',
     accent: '#8fa8e8',
+    ink: '#dde3f2',
+    inkSoft: '#8b94ad',
+    bannerPlayer: ['#7a6c48', '#2a2820', '#ffd166'],
+    bannerEnemy: ['#4a5a9a', '#1c2238', '#9fb6ec'],
   },
 };
 

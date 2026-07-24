@@ -51,6 +51,10 @@ export function drawBackdrop(
   floorY: number,
   timeMs: number,
   theme: RegionTheme,
+  /** First buffer row not hidden behind the header. The sky ramp still fills
+   * from 0 (the header is translucent), but the orb and stars hang below this
+   * or they get sliced in half by the chrome. */
+  skyTop = 0,
 ) {
   const t = timeMs / 1000;
   const sky = theme.sky;
@@ -66,7 +70,7 @@ export function drawBackdrop(
     ctx.fillStyle = '#c6cbe4';
     for (let i = 0; i < Math.ceil(w / 22); i++) {
       const sx = (i * 41 + 9) % w;
-      const sy = 3 + Math.floor(hash(i * 7 + 3) * Math.max(4, floorY * 0.45));
+      const sy = skyTop + 3 + Math.floor(hash(i * 7 + 3) * Math.max(4, (floorY - skyTop) * 0.45));
       if (Math.sin(t * 1.6 + sx) > -0.2) ctx.fillRect(sx, sy, 1, 1);
     }
   }
@@ -76,7 +80,7 @@ export function drawBackdrop(
   // it has to match the unlit sky exactly. A full sun (bright regions) skips
   // the carve.
   const mx = w - 15;
-  const my = 11;
+  const my = skyTop + 11;
   ctx.fillStyle = theme.orb;
   for (const [dy, hw] of ORB_ROWS) ctx.fillRect(mx - hw, my + dy, hw * 2 + 1, 1);
   if (theme.crescent) {

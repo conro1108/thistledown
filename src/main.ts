@@ -78,12 +78,12 @@ const SCORES_KEY = 'overgrown.scores.v1';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
+  <canvas id="backdrop" width="1" height="1"></canvas>
   <header id="hud">
     <span id="fightname">Overgrown</span>
-    <span id="hud-right"><button id="sound-btn" class="trinket" title="Sound">${iconHTML(isMuted() ? 'muted' : 'sound', 'p15')}</button><button id="dev-btn" class="trinket" title="Dev">${iconHTML('wrench', 'p15')}</button><button id="history-btn" class="trinket hidden" title="Look back">${iconHTML('rewind', 'p15')}</button><span id="trinkets"></span></span>
+    <span id="hud-right"><button id="sound-btn" class="trinket" title="Sound">${iconHTML(isMuted() ? 'muted' : 'sound', 'p2')}</button><button id="dev-btn" class="trinket" title="Dev">${iconHTML('wrench', 'p2')}</button><button id="history-btn" class="trinket hidden" title="Look back">${iconHTML('rewind', 'p2')}</button><span id="trinkets"></span></span>
   </header>
   <div id="board-area">
-    <canvas id="backdrop" width="1" height="1"></canvas>
     <div id="board-wrap" class="idle">
       <canvas id="board" width="96" height="96"></canvas>
     </div>
@@ -107,6 +107,7 @@ const ctx = canvas.getContext('2d')!;
 const backdropEl = document.querySelector<HTMLCanvasElement>('#backdrop')!;
 const backdropCtx = backdropEl.getContext('2d')!;
 const boardAreaEl = document.querySelector<HTMLDivElement>('#board-area')!;
+const hudEl = document.querySelector<HTMLElement>('#hud')!;
 const hudName = document.querySelector<HTMLSpanElement>('#fightname')!;
 const trinketsEl = document.querySelector<HTMLSpanElement>('#trinkets')!;
 const statusEl = document.querySelector<HTMLDivElement>('#status')!;
@@ -450,11 +451,21 @@ function retryClearing() {
 /** Repaint the overlay/card chrome in the current region's palette. */
 function applyRegionTheme(theme: RegionTheme) {
   const root = document.documentElement.style;
-  root.setProperty('--panel-solid', theme.css.panel);
-  root.setProperty('--panel-2', theme.css.panel2);
-  root.setProperty('--edge', theme.css.edge);
-  root.setProperty('--overlay-bg', theme.css.scrim);
-  root.setProperty('--accent', theme.css.accent);
+  const c = theme.css;
+  root.setProperty('--panel-solid', c.panel);
+  root.setProperty('--panel-2', c.panel2);
+  root.setProperty('--edge', c.edge);
+  root.setProperty('--overlay-bg', c.scrim);
+  root.setProperty('--accent', c.accent);
+  root.setProperty('--ink', c.ink);
+  root.setProperty('--ink-soft', c.inkSoft);
+  const banner = (name: string, [edge, bg, ink]: [string, string, string]) => {
+    root.setProperty(`--banner-${name}-edge`, edge);
+    root.setProperty(`--banner-${name}-bg`, bg);
+    root.setProperty(`--banner-${name}-ink`, ink);
+  };
+  banner('player', c.bannerPlayer);
+  banner('enemy', c.bannerEnemy);
 }
 
 function stageUi() {
@@ -828,7 +839,7 @@ function refreshHud() {
     // a real button: title= tooltips don't exist on a phone
     const t = document.createElement('button');
     t.className = 'trinket';
-    t.append(iconEl(TRINKET_ICONS[id], 'p15'));
+    t.append(iconEl(TRINKET_ICONS[id], 'p2'));
     t.onclick = () =>
       showOverlay(`${iconHTML(TRINKET_ICONS[id], 'p2')} ${TRINKETS[id].title}`, TRINKETS[id].blurb, [
         { label: 'Onward', fn: () => {} },
@@ -841,7 +852,7 @@ function refreshHud() {
     const left = upgradeClearingsLeft(run, id);
     const u = document.createElement('button');
     u.className = 'trinket';
-    u.append(iconEl(UPGRADE_ICONS[id], 'p15'));
+    u.append(iconEl(UPGRADE_ICONS[id], 'p2'));
     const badge = document.createElement('span');
     badge.className = 'upgrade-left';
     badge.textContent = String(left);
@@ -1423,7 +1434,7 @@ devBtn.onclick = showDevPanel;
 soundBtn.onclick = () => {
   unlockAudio();
   const nowMuted = toggleMute();
-  soundBtn.innerHTML = iconHTML(nowMuted ? 'muted' : 'sound', 'p15');
+  soundBtn.innerHTML = iconHTML(nowMuted ? 'muted' : 'sound', 'p2');
   if (!nowMuted) playSfx('ui'); // a blip so you hear it come back on
 };
 
@@ -1569,9 +1580,16 @@ function drainEvents() {
  * meadow and the clearing share one pixel grid. floorY is the horizon row. */
 let bgScale = 4;
 let bgFloorY = 40;
+let bgSkyTop = 0;
+
+/** #board-area's vertical padding — must match the `padding` in style.css, as
+ * the horizon is placed relative to the board's top edge. */
+const BOARD_PAD_TOP = 16;
+const BOARD_PAD_BOTTOM = 4;
 
 function sizeCanvas() {
   const area = boardAreaEl.getBoundingClientRect();
+  const appRect = app.getBoundingClientRect();
   if (area.width < 1 || area.height < 1) return;
   let scale = bgScale;
   let boardTopCss: number | null = null;
@@ -1585,13 +1603,20 @@ function sizeCanvas() {
       canvas.style.width = w;
       canvas.style.height = `${canvas.height * scale}px`;
     }
-    // the board is centered in the area's content box (padding 18px top, 4px bottom)
-    boardTopCss = 18 + Math.max(0, (area.height - 22 - canvas.height * scale) / 2);
+    // The board is centred in #board-area's content box, but the backdrop now
+    // spans all of #app — so offset by where the area sits inside it.
+    boardTopCss =
+      area.top -
+      appRect.top +
+      BOARD_PAD_TOP +
+      Math.max(0, (area.height - BOARD_PAD_TOP - BOARD_PAD_BOTTOM - canvas.height * scale) / 2);
   }
-  // backdrop: integer-scaled like everything else; the buffer rounds up to
-  // cover the area and the extra sliver is cropped by overflow:hidden
-  const bw = Math.max(1, Math.ceil(area.width / scale));
-  const bh = Math.max(1, Math.ceil(area.height / scale));
+  // The backdrop runs behind the whole column — header and roster included —
+  // so the meadow reaches every edge instead of being cut off by chrome.
+  // Integer-scaled like everything else; the buffer rounds up to cover the
+  // app box and the extra sliver is cropped by #app's overflow:hidden.
+  const bw = Math.max(1, Math.ceil(appRect.width / scale));
+  const bh = Math.max(1, Math.ceil(appRect.height / scale));
   if (backdropEl.width !== bw || backdropEl.height !== bh || bgScale !== scale) {
     backdropEl.width = bw;
     backdropEl.height = bh;
@@ -1602,6 +1627,8 @@ function sizeCanvas() {
   // horizon: a few pixels of meadow grass peeking above the board's top edge
   const floor = boardTopCss != null ? Math.round(boardTopCss / scale) - 4 : Math.round(bh * 0.42);
   bgFloorY = Math.max(18, Math.min(bh - 12, floor));
+  // the sun/moon hangs below the header, not behind it
+  bgSkyTop = Math.min(bgFloorY - 24, Math.round(hudEl.getBoundingClientRect().height / scale));
 }
 
 window.addEventListener('resize', sizeCanvas);
@@ -1628,7 +1655,7 @@ function frame(time: number) {
 function renderFrame(time: number) {
   const theme = themeFor(run ? regionOf(run.fightIndex) : 0);
   const ground: [string, string] = [theme.boardA, theme.boardB];
-  drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time, theme);
+  drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time, theme, bgSkyTop);
   if (history) {
     // a remembered board: no selection, no effects, just the moment
     draw(ctx, history.states[history.idx].f, { selected: null, hover: null, fx: [], ground }, time);
