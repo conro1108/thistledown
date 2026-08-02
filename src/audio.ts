@@ -30,6 +30,7 @@ export function soundForEvent(type: FightEvent['type']): SoundName {
     case 'shaken':
       return 'oof';
     case 'blocked':
+    case 'shielded':
       return 'thud';
     case 'tempo':
     case 'flee':

@@ -308,30 +308,75 @@ export function heartCornered(s: FightState): boolean {
 }
 
 /**
- * A checked Heart that can't flee presses one defender into service: the
- * telegraph that answers the check, ahead of every other appetite. Checks
- * force the whole side — that's what makes the mating net a real hunt.
- * Prefers taking the checker; blocks with the cheapest body otherwise.
+ * True when the Heart is checked *and* pinned — its square is covered and every
+ * square it could step to is too. The one situation where the bramble has to
+ * answer with somebody else's body.
  */
-function forcedRescue(s: FightState): Telegraph | null {
+function heartPinned(s: FightState): boolean {
   const h = s.pieces.find((p) => p.kind === 'heart');
-  if (!h) return null;
+  if (!h) return false;
   const cover = friendCover(s);
-  if (!cover.has(h.y * 64 + h.x)) return null;
-  if (movesFor(s, h).some((m) => !cover.has(m.y * 64 + m.x))) return null; // it can flee on its own
-  let best: Telegraph | null = null;
+  if (!cover.has(h.y * 64 + h.x)) return false;
+  return !movesFor(s, h).some((m) => !cover.has(m.y * 64 + m.x)); // else it flees on its own
+}
+
+/**
+ * The best body to throw at a check right now: prefers taking the checker,
+ * blocks the lane with the cheapest piece otherwise. `skip` holds the pieces
+ * that already spent their action this turn.
+ */
+function bestRescue(s: FightState, skip?: Set<number>): { piece: Piece; to: Vec } | null {
+  let best: { piece: Piece; to: Vec } | null = null;
   let bestScore = -Infinity;
   for (const { piece, to } of heartRescues(s)) {
+    if (skip?.has(piece.id)) continue;
     const victim = pieceAt(s, to.x, to.y);
     const score = (victim ? 100 * PIECE_VALUE[victim.kind] : 0) - PIECE_VALUE[piece.kind];
     if (score > bestScore) {
       bestScore = score;
-      best = { pieceId: piece.id, to };
-      if (victim) best.target = victim.id;
-      if (piece.veiled) best.veiled = true;
+      best = { piece, to };
     }
   }
   return best;
+}
+
+/**
+ * A checked Heart that can't flee presses one defender into service: the
+ * telegraph that answers the check, ahead of every other appetite. Checks
+ * force the whole side — that's what makes the mating net a real hunt.
+ */
+function forcedRescue(s: FightState): Telegraph | null {
+  if (!heartPinned(s)) return null;
+  const r = bestRescue(s);
+  if (!r) return null;
+  const t: Telegraph = { pieceId: r.piece.id, to: r.to };
+  const victim = pieceAt(s, r.to.x, r.to.y);
+  if (victim) t.target = victim.id;
+  if (r.piece.veiled) t.veiled = true;
+  return t;
+}
+
+/**
+ * Checks are forcing at *resolve* time too. You move first, so a check you
+ * deliver lands after the bramble has already committed its telegraphs: the
+ * Heart re-reads the board (resolveHeart) but its guards can't. Without this a
+ * Heart that's checked with nowhere to run just sits in check through your
+ * whole next turn while its guards run errands — a position that can't happen
+ * in the game this is quietly teaching, and it reads as a plain bug.
+ *
+ * So the Heart spends its own action on somebody else's body: an idle guard —
+ * one that didn't hold a telegraph this turn, so nothing moves twice — takes
+ * the checker or throws itself in the lane. Called only once the telegraphs
+ * have settled, so a guard that just cleared the Heart's flight square is
+ * still preferred (the Heart flees and this never fires). Returns false when
+ * nobody can help: that's cornered, and settleCornered says so.
+ */
+function shieldHeart(s: FightState, spent: Set<number>): boolean {
+  const r = bestRescue(s, spent);
+  if (!r) return false;
+  s.events.push({ type: 'shielded', at: { x: r.to.x, y: r.to.y }, kind: r.piece.kind });
+  land(s, r.piece, r.to);
+  return true;
 }
 
 /** The friend a telegraph lands on, if any — the piece a red attack is aimed at. */
@@ -367,11 +412,14 @@ function resolveTelegraphs(s: FightState) {
   // own turn. Moving it last lets it flee onto whatever its defenders just cleared.
   const order = [...s.telegraphs];
   order.sort((a, b) => heartTurnOrder(s, a) - heartTurnOrder(s, b));
+  // everyone holding a telegraph spends this turn's action on it, blocked or
+  // not — only an idle guard can be pressed into a shield (see shieldHeart)
+  const spent = new Set(order.map((t) => t.pieceId));
   for (const t of order) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e) continue;
     if (e.kind === 'heart') {
-      resolveHeart(s, e, t);
+      resolveHeart(s, e, t, spent);
       if (s.status !== 'playing') return;
       continue;
     }
@@ -461,15 +509,17 @@ function land(s: FightState, e: Piece, to: Vec) {
  * The king rule, at resolve time: the Heart re-reads the board after your
  * move. Checked, it abandons its plan and flees to the best uncovered square;
  * and it never steps onto a square that became covered after it committed —
- * it balks instead. (Checked with no way out never reaches here: that's
- * cornered, and settleCornered has already ended the fight.)
+ * it balks instead. Checked with nowhere left to run, it spends its action on
+ * a guard that answers the check (shieldHeart) — if none can, it's cornered and
+ * settleCornered ends the fight.
  */
-function resolveHeart(s: FightState, h: Piece, t: Telegraph) {
+function resolveHeart(s: FightState, h: Piece, t: Telegraph, spent: Set<number>) {
   const cover = friendCover(s);
   if (cover.has(h.y * 64 + h.x)) {
     const outs = movesFor(s, h).filter((m) => !cover.has(m.y * 64 + m.x));
     const to = pickBest(s, outs).to;
-    if (!to) return; // walled in mid-resolve; settleCornered will judge it
+    // nowhere to run: a guard answers the check instead, or settleCornered judges it
+    if (!to) return void shieldHeart(s, spent);
     s.events.push({ type: 'flee', at: { x: h.x, y: h.y }, kind: 'heart' });
     land(s, h, to);
     return;

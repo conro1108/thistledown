@@ -9,6 +9,7 @@ import {
   type FightConfig,
   type Spawn,
 } from './fight';
+import { threatsFor } from './board';
 import { mulberry32 } from './rng';
 import type { FightState } from './types';
 
@@ -21,6 +22,16 @@ function fight(
   extra: Partial<FightConfig> = {},
 ): FightState {
   return createFight({ name: 't', w, h, friends, enemies, actsPerTurn, ...extra }, mulberry32(7));
+}
+
+/** Is the Heart's own square covered by the friends right now? */
+function heartChecked(s: FightState): boolean {
+  const h = s.pieces.find((p) => p.kind === 'heart');
+  if (!h) return false;
+  const view = { ...s, pieces: s.pieces.filter((p) => p.kind !== 'heart') };
+  return view.pieces.some(
+    (p) => p.side === 'friend' && threatsFor(view, p).some((t) => t.x === h.x && t.y === h.y),
+  );
 }
 
 function idAt(s: FightState, x: number, y: number): number {
@@ -704,6 +715,38 @@ describe('fight loop', () => {
     const h = s.pieces.find((p) => p.kind === 'heart')!;
     expect({ x: h.x, y: h.y }).toEqual({ x: 1, y: 1 }); // it scrambled out, toward the keeper
     expect(s.events.some((ev) => ev.type === 'flee' && ev.kind === 'heart')).toBe(true);
+  });
+
+  it('a check delivered after the telegraphs are set is still answered this turn', () => {
+    // The bramble commits its telegraphs before your move lands, so a check you
+    // deliver now was never planned against. The Heart must not sit in it through
+    // your whole next turn: a guard drops its own plan and blocks the lane.
+    const s = fight(
+      [
+        { kind: 'keeper', x: 4, y: 5 },
+        { kind: 'rumble', x: 1, y: 5 },
+        { kind: 'sprout', x: 5, y: 3 }, // bait: gives the golem a juicier plan than the Heart's safety
+      ],
+      [
+        { kind: 'heart', x: 0, y: 0 },
+        { kind: 'thistle', x: 1, y: 0 }, // its own guards seal (1,0)…
+        { kind: 'thistle', x: 1, y: 1 }, // …and (1,1): the only flight left is (0,1)
+        { kind: 'creeper', x: 2, y: 2 }, // idle, and its diagonal reaches (0,4) — the block
+        { kind: 'golem', x: 5, y: 2 },
+      ],
+    );
+    // no check yet, so the golem's capture is the one telegraph: nobody is guarding
+    expect(s.telegraphs.filter((t) => t.to)).toEqual([
+      { pieceId: idAt(s, 5, 2), to: { x: 5, y: 3 }, target: idAt(s, 5, 3) },
+    ]);
+    playerMove(s, idAt(s, 1, 5), { x: 0, y: 5 }); // the rumble takes column 0 — check
+    expect(s.status).toBe('playing'); // escapable: the creeper can interpose
+    resolveEnemyTurn(s);
+    expect(s.events.some((ev) => ev.type === 'shielded' && ev.kind === 'creeper')).toBe(true);
+    expect(s.pieces.find((p) => p.kind === 'creeper')!.x).toBe(0); // stepped into the lane
+    expect(s.pieces.find((p) => p.kind === 'heart')).toMatchObject({ x: 0, y: 0 }); // still home…
+    expect(heartChecked(s)).toBe(false); // …and no longer under attack
+    expect(s.pieces.find((p) => p.kind === 'sprout')).toBeUndefined(); // the golem still got its bite
   });
 
   it('the Heart balks at resolve rather than stepping onto a square you just covered', () => {

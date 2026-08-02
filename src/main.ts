@@ -1500,6 +1500,7 @@ const NOTE_PRI = {
   twisted: 5, // a Thistle promoted to a Gloom: a new danger you must see
   blocked: 4, // you walled a mover — the block tactic, kept loud
   smothered: 4, // you stamped out a sprout
+  shielded: 4, // your check landed and a guard had to answer it — the forcing-move lesson
   flee: 3, // the Heart bolted from your net
   sprouted: 2, // a fresh Thistle broke soil
   stir: 1, // the spread clock ticked
@@ -1535,6 +1536,12 @@ function drainEvents() {
     } else if (ev.type === 'tempo') {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       tempoKind = ev.kind;
+    } else if (ev.type === 'shielded') {
+      fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      note(
+        NOTE_PRI.shielded,
+        `The Bramble Heart has nowhere to run — the ${KIND_INFO[ev.kind].title} throws itself in the way!`,
+      );
     } else if (ev.type === 'flee') {
       fx.push({ at: ev.at, kind: 'shaken', t: 0 });
       note(NOTE_PRI.flee, 'Your trap springs — the Bramble Heart scrambles for safety!');

@@ -96,6 +96,7 @@ export interface FightEvent {
     | 'cornered'
     | 'tempo'
     | 'flee'
+    | 'shielded' // the Heart couldn't run, so a guard took the checker or blocked the lane
     | 'stir' // the spread clock marks a square — fair warning
     | 'sprouted' // …and a thistle grows there
     | 'smothered' // …unless a friend was standing on it
