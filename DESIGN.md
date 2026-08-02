@@ -144,7 +144,9 @@ Slay-the-Spire-shaped, kept simple:
 - **Events**: little illustrated choose-one scenes. Risk/reward, jokes, occasional
   free recruit.
 - **Trinkets** (relics): run-defining passives. *Dandelion Cloak* — once per fight, a
-  captured friend instead retreats to your back rank. *Acorn Whistle* — Hoppers can
+  captured friend instead retreats to your back rank — a Slink lands on a square of
+  its own colour, since giving one back on the wrong colour is giving back a
+  different piece. *Acorn Whistle* — Hoppers can
   make a plain one-step move. *Second Breakfast* — your first move each fight comes
   with an extra non-capturing move (a stretch, not a snatch — the full double-move
   version proved wildly OP). Aim for ~30 at launch.

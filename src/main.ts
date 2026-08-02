@@ -29,7 +29,7 @@ import {
 import type { FightState, Kind, Telegraph, UpgradeId, Vec } from './game/types';
 import { drawBackdrop } from './render/backdrop';
 import { iconEl, iconHTML, type IconName } from './render/icons';
-import { draw, TILE, type FX, type PosOverrides } from './render/scene';
+import { draw, FX_LIFE, TILE, type FX, type PosOverrides } from './render/scene';
 import { themeFor, type RegionTheme } from './render/themes';
 import { drawSprite } from './render/sprites';
 import { isMuted, playSfx, soundForEvent, toggleMute, unlockAudio, type SoundName } from './audio';
@@ -71,6 +71,7 @@ const DEFAULT_HINT =
   'Tap a friend (on the board or below), then tap a glowing square — or just drag them there.';
 const PAUSE_MS = 340; // beat after your move, before the bramble acts
 const TWEEN_MS = 190; // how long their slide/leap takes to draw
+const SAVE_BEAT_MS = 660; // a Ward/Cloak save holds the turn open to be watched
 const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 // v5: movement upgrades + expanded, region-gated trinkets shift the run's RNG
 // draw order, so older decision logs no longer replay faithfully — let them go
@@ -143,6 +144,21 @@ let tweenDur = TWEEN_MS;
 let frozenTelegraphs: Telegraph[] | null = null;
 /** set while resolving if something noteworthy happened — shown as the next hint */
 let blockedNote: string | null = null;
+/**
+ * Which trinket just saved a friend, if one did on the last enemy turn. Drives
+ * the banner's gold state and the pulse on the badge that spent itself — the
+ * board effect says *where* the save happened, this says *what did it*.
+ */
+let savedBy: TrinketId | null = null;
+/**
+ * When that save happened. The gold banner and the badge highlight last as long
+ * as the note explaining them does, but the *flash* is one-shot: refreshHud
+ * rebuilds both elements on every tap, and a banner that re-flashes each time
+ * you pick a critter up is noise, not signal.
+ */
+let savedAt = 0;
+const SAVE_FLASH_MS = 900;
+const saveFlashing = () => savedBy != null && performance.now() - savedAt < SAVE_FLASH_MS;
 /** the enemy the player just caught mid-lunge (its telegraph died with it) */
 let tempoKind: Kind | null = null;
 /** looking back through this clearing's moves (view-only, replay-built) */
@@ -528,6 +544,7 @@ function enterFight(resume: boolean) {
   cancelBeat(); // a beat left over from the last clearing must never fire into this one
   frozenTelegraphs = null;
   blockedNote = null;
+  savedBy = null;
   tempoKind = null;
   history = null;
   historyBar.classList.add('hidden');
@@ -845,6 +862,11 @@ function refreshHud() {
   const goal = goalLabel();
   statusLineEl.innerHTML = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
   statusEl.className = fight.status !== 'playing' ? fight.status : phase;
+  // a save overrides the phase tint: gold, so the banner itself is the alarm
+  if (savedBy && fight.status === 'playing') {
+    statusEl.classList.add('saved');
+    if (saveFlashing()) statusEl.classList.add('flash');
+  }
   historyBtn.classList.toggle(
     'hidden',
     devDirty || !sess || sess.stage !== 'fight' || fight.status !== 'playing',
@@ -856,11 +878,24 @@ function refreshHud() {
     // a real button: title= tooltips don't exist on a phone
     const t = document.createElement('button');
     t.className = 'trinket';
+    // The Cloak and the Ward hold one charge per clearing. A spent one that
+    // still looks fully lit is a promise the game can't keep — so it dims, and
+    // the one that just fired flashes gold to tie the save to its cause.
+    const charge = id === 'cloak' ? fight.cloakLeft : id === 'ward' ? fight.wardLeft : null;
+    if (charge === 0) t.classList.add('spent');
+    if (savedBy === id) {
+      t.classList.add('fired');
+      if (saveFlashing()) t.classList.add('flash');
+    }
     t.append(iconEl(TRINKET_ICONS[id], 'p2'));
     t.onclick = () =>
-      showOverlay(`${iconHTML(TRINKET_ICONS[id], 'p2')} ${TRINKETS[id].title}`, TRINKETS[id].blurb, [
-        { label: 'Onward', fn: () => {} },
-      ]);
+      showOverlay(
+        `${iconHTML(TRINKET_ICONS[id], 'p2')} ${TRINKETS[id].title}`,
+        charge === 0
+          ? `${TRINKETS[id].blurb} <span class="objective">Already spent in this clearing — it comes back at the next one.</span>`
+          : TRINKETS[id].blurb,
+        [{ label: 'Onward', fn: () => {} }],
+      );
     trinketsEl.append(t);
   }
   // Movement upgrades are temporary — show each live one with the clearings it has left,
@@ -1105,6 +1140,7 @@ function beginEnemyTurn() {
       : stolen
         ? `You caught the ${stolen} mid-lunge — the bramble loses its whole turn! ${iconHTML('daisy')}`
         : 'The bramble holds still — nothing moves this turn. Go!';
+    savedBy = null; // only ever describes the turn that just resolved
     doEntry({ t: 'resolve' });
     drainEvents();
 
@@ -1121,7 +1157,9 @@ function beginEnemyTurn() {
     tweenDur = TWEEN_MS;
     refreshHud();
 
-    scheduleBeat(tweens.length ? TWEEN_MS : 60, () => {
+    // a save gets its own beat: the burst, the drift and the badge pulse all
+    // need a moment to land before the board goes back to waiting on you
+    scheduleBeat(savedBy ? SAVE_BEAT_MS : tweens.length ? TWEEN_MS : 60, () => {
       tweens = [];
       frozenTelegraphs = null;
       phase = 'player';
@@ -1697,7 +1735,9 @@ function drainEvents() {
       fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       note(NOTE_PRI.smothered, `Smothered underfoot — nothing grows there today! ${iconHTML('daisy')}`);
     } else if (ev.type === 'cloaked') {
-      fx.push({ at: ev.at, kind: 'shaken', t: 0 });
+      fx.push({ at: ev.at, kind: 'cloak', t: 0, to: ev.to });
+      savedBy = 'cloak';
+      savedAt = performance.now();
       note(
         NOTE_PRI.saved,
         `The Dandelion Cloak whisks ${
@@ -1705,7 +1745,9 @@ function drainEvents() {
         } safely home! ${iconHTML('cloak')}`,
       );
     } else if (ev.type === 'warded') {
-      fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      fx.push({ at: ev.at, kind: 'ward', t: 0 });
+      savedBy = 'ward';
+      savedAt = performance.now();
       note(
         NOTE_PRI.saved,
         `The Bramble Ward turns the blow aside — ${
@@ -1839,7 +1881,8 @@ function renderFrame(time: number) {
       time,
     );
     for (const f of fx) f.t++;
-    fx = fx.filter((f) => f.t < 26);
+    // per-kind lifetimes: a trinket save lingers well past a scuffle
+    fx = fx.filter((f) => f.t < FX_LIFE[f.kind]);
   }
 }
 

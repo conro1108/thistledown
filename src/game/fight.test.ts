@@ -85,6 +85,52 @@ describe('fight loop', () => {
     expect(s.pieces.find((p) => p.kind === 'thistle')).toMatchObject({ x: 4, y: 4 });
   });
 
+  it('Dandelion Cloak: a Slink comes home to a square of its own colour', () => {
+    // home row is y=5; the keeper sits on x=0, so x=1 is the first free square —
+    // but it is the wrong colour for a Slink caught on (3,4).
+    const s = fight(
+      [{ kind: 'keeper', x: 0, y: 5 }, { kind: 'slink', x: 3, y: 4 }],
+      [{ kind: 'thistle', x: 2, y: 3 }],
+      1,
+      6,
+      6,
+      { cloak: true },
+    );
+    expect(s.telegraphs[0].to).toEqual({ x: 3, y: 4 });
+    playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 });
+    resolveEnemyTurn(s);
+    const slink = s.pieces.find((p) => p.kind === 'slink')!;
+    expect(slink.y).toBe(5);
+    // a Slink glides on one colour forever — landing it on the other one would
+    // hand back a different piece than the one that was saved
+    expect((slink.x + slink.y) % 2).toBe((3 + 4) % 2);
+    const ev = s.events.find((e) => e.type === 'cloaked')!;
+    expect(ev.at).toEqual({ x: 3, y: 4 }); // where it was caught…
+    expect(ev.to).toEqual({ x: slink.x, y: slink.y }); // …and where it drifted to
+  });
+
+  it('Dandelion Cloak: with no square of its colour free, a Slink takes what it can get', () => {
+    // every same-colour home square is occupied, so the save still happens
+    const s = fight(
+      [
+        { kind: 'keeper', x: 0, y: 5 },
+        { kind: 'rumble', x: 2, y: 5 },
+        { kind: 'rumble', x: 4, y: 5 },
+        { kind: 'slink', x: 3, y: 4 },
+      ],
+      [{ kind: 'thistle', x: 2, y: 3 }],
+      1,
+      6,
+      6,
+      { cloak: true },
+    );
+    playerMove(s, idAt(s, 0, 5), { x: 0, y: 4 });
+    resolveEnemyTurn(s);
+    const slink = s.pieces.find((p) => p.kind === 'slink')!;
+    expect(slink).toMatchObject({ y: 5 });
+    expect(s.events.some((e) => e.type === 'cloaked')).toBe(true);
+  });
+
   it('Dandelion Cloak never saves the keeper — losing him still ends the fight', () => {
     const s = fight(
       [{ kind: 'keeper', x: 4, y: 4 }, { kind: 'sprout', x: 0, y: 4 }],

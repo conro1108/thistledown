@@ -481,13 +481,16 @@ function land(s: FightState, e: Piece, to: Vec) {
   const occ = pieceAt(s, to.x, to.y);
   if (occ && occ.side === 'friend') {
     // the Cloak spares a companion, never the Keeper — losing the Keeper always ends the fight
-    const spot = occ.kind !== 'keeper' && s.cloakLeft > 0 ? cloakSpot(s, to) : null;
+    const spot = occ.kind !== 'keeper' && s.cloakLeft > 0 ? cloakSpot(s, to, occ) : null;
     if (spot) {
       // Dandelion Cloak: the friend drifts home instead of being caught
       s.cloakLeft--;
       occ.x = spot.x;
       occ.y = spot.y;
-      s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind });
+      // `to` rides along so the renderer can draw the drift — a piece that just
+      // teleports across the board with no line connecting the two squares is
+      // the single most confusing thing that happens in a fight
+      s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind, to: { ...spot } });
     } else if (s.wardLeft > 0) {
       // Bramble Ward: the capture is shrugged off — the friend stands (the Keeper
       // too), and the attacker recoils rather than completing its move.
@@ -613,14 +616,28 @@ function landingFor(s: FightState, e: Piece, aim: Vec): Vec | null {
   return aimHit;
 }
 
-/** First free square on the friends' home row (skipping where the enemy lands). */
-function cloakSpot(s: FightState, landing: Vec): Vec | null {
+/**
+ * Where a cloaked friend drifts home to: a free square on the friends' home row
+ * (never the one the enemy is landing on).
+ *
+ * A Slink glides on one square colour for its entire life. Setting a rescued one
+ * down on the other colour would quietly hand the player a different piece than
+ * the one they just saved — every square it used to cover, it no longer can — so
+ * it comes home to its own colour whenever one is free, and only falls back to
+ * any free square when none is.
+ */
+function cloakSpot(s: FightState, landing: Vec, p: Piece): Vec | null {
   const y = s.h - 1;
+  const free: Vec[] = [];
   for (let x = 0; x < s.w; x++) {
     if (landing.x === x && landing.y === y) continue;
-    if (!pieceAt(s, x, y)) return { x, y };
+    if (!pieceAt(s, x, y)) free.push({ x, y });
   }
-  return null;
+  if (p.kind === 'slink') {
+    const own = free.find((v) => (v.x + v.y) % 2 === (p.x + p.y) % 2);
+    if (own) return own;
+  }
+  return free[0] ?? null;
 }
 
 function assignTelegraphs(s: FightState) {

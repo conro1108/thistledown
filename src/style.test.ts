@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-
-// Read from disk, not `import css from './style.css?raw'` — Vitest stubs CSS
-// imports to an empty string, which quietly made every check below vacuous.
-const css = readFileSync(new URL('./style.css', import.meta.url), 'utf8');
+// Needs `css: true` in vitest.config.ts: Vitest otherwise stubs CSS imports to
+// an empty string, which quietly made every check in here vacuous.
+import css from './style.css?raw';
 
 /**
  * The chrome has to obey the same rule as the renderer: integer pixels only.

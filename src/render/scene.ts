@@ -1,14 +1,31 @@
 import { isPawn, isSlider, movesFor, pieceAt, threatsFor } from '../game/board';
 import type { FightState, Telegraph, Vec } from '../game/types';
+import { ICONS, type IconName } from './icons';
 import { drawRankBadge, drawSprite } from './sprites';
 
 export const TILE = 16;
 
 export interface FX {
   at: Vec;
-  kind: 'poof' | 'shaken' | 'bonk';
+  kind: 'poof' | 'shaken' | 'bonk' | 'ward' | 'cloak';
   t: number; // frames elapsed
+  /** cloak: where the rescued friend drifted to, so the drift can be drawn */
+  to?: Vec;
 }
+
+/**
+ * How long each effect lives, in frames. A trinket save gets roughly twice the
+ * life of a scuffle: it is the one moment where the rules appear to break — a
+ * telegraphed capture simply doesn't happen — so it has to hold the eye long
+ * enough to be read, not just glimpsed.
+ */
+export const FX_LIFE: Record<FX['kind'], number> = {
+  poof: 26,
+  shaken: 26,
+  bonk: 26,
+  ward: 54,
+  cloak: 54,
+};
 
 /** id -> fractional board-cell position, for the enemy-move tween. */
 export type PosOverrides = Map<number, Vec>;
@@ -143,6 +160,16 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     }
   }
 
+  // A save's ground wash goes UNDER the pieces: the rescued friend should sit in
+  // a pool of lantern light, not behind a curtain of sparks.
+  for (const f of v.fx) {
+    if (f.kind !== 'ward' && f.kind !== 'cloak') continue;
+    const home = f.kind === 'cloak' ? (f.to ?? f.at) : f.at;
+    const fade = Math.min(1, (FX_LIFE[f.kind] - f.t) / 14);
+    ctx.fillStyle = `rgba(255, 217, 102, ${0.34 * fade})`;
+    ctx.fillRect(home.x * TILE + 1, home.y * TILE + 1, TILE - 2, TILE - 2);
+  }
+
   // pieces, with a 1px integer idle bob (never fractional — pixel grid is sacred).
   // A carried piece goes last: it should pass over its neighbours, not under.
   const order =
@@ -166,6 +193,10 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
 
   // capture / shaken / blocked effects
   for (const f of v.fx) {
+    if (f.kind === 'ward' || f.kind === 'cloak') {
+      saveFx(ctx, f);
+      continue;
+    }
     const cx = f.at.x * TILE + 8;
     const cy = f.at.y * TILE + 8;
     const r = 1 + Math.floor(f.t / 4);
@@ -182,6 +213,85 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       ctx.fillStyle = cols[(i + f.t) % cols.length];
       ctx.fillRect(px, py, 1, 1);
     }
+  }
+}
+
+const SAVE_GOLD = '#ffd966';
+const SAVE_CREAM = '#f6f3e8';
+
+/**
+ * A trinket save, drawn loud. This is the one event where the game appears to
+ * cheat — a capture was telegraphed in red, and then the friend is still there
+ * (Ward) or somewhere else entirely (Cloak). The old effect was the same small
+ * grey scuffle used for a bump, which is why it read as "nothing happened".
+ *
+ * So: a gold burst that outlives every other effect, the trinket's own HUD icon
+ * popping over the square so the cause is named in the same art the badge uses,
+ * and — for the Cloak — a dotted trail drawn from where the friend was caught to
+ * where it drifted home, so the teleport has a line you can follow.
+ */
+function saveFx(ctx: CanvasRenderingContext2D, f: FX) {
+  const life = FX_LIFE[f.kind];
+  const home = f.kind === 'cloak' ? (f.to ?? f.at) : f.at;
+  // the drift: dots laid down from the capture square toward home, revealed a
+  // few at a time so the eye is pulled along the path rather than teleported
+  if (f.kind === 'cloak' && f.to && (f.to.x !== f.at.x || f.to.y !== f.at.y)) {
+    const ax = f.at.x * TILE + 8;
+    const ay = f.at.y * TILE + 8;
+    const bx = f.to.x * TILE + 8;
+    const by = f.to.y * TILE + 8;
+    const dist = Math.hypot(bx - ax, by - ay);
+    const lead = (f.t / 16) * dist; // the spark's head, in pixels along the path
+    for (let d = 4; d <= dist - 4; d += 5) {
+      if (d > lead) break;
+      const px = Math.round(ax + ((bx - ax) * d) / dist);
+      const py = Math.round(ay + ((by - ay) * d) / dist);
+      // the tail dims behind the spark so the direction of travel is unmistakable
+      const age = lead - d;
+      ctx.fillStyle = age < 12 ? SAVE_CREAM : SAVE_GOLD;
+      const s = age < 12 ? 2 : 1;
+      ctx.fillRect(px, py, s, s);
+    }
+  }
+  // rings: two, one chasing the other out of the square that was saved
+  const cx = home.x * TILE + 8;
+  const cy = home.y * TILE + 8;
+  for (const delay of [0, 10]) {
+    const age = f.t - delay;
+    if (age < 0 || age > 30) continue;
+    const r = 2 + Math.floor(age / 3);
+    ctx.fillStyle = age > 20 ? SAVE_GOLD : SAVE_CREAM;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      ctx.fillRect(cx + Math.round(Math.cos(a) * r), cy + Math.round(Math.sin(a) * r), 1, 1);
+    }
+  }
+  // a held gold frame on the square the friend is standing on now — after the
+  // burst clears, this is what says "look here, this one is still yours"
+  if (Math.floor(f.t / 5) % 2 === 0 || f.t > 40) corners(ctx, home.x, home.y, SAVE_GOLD);
+  // the trinket's own icon, rising and fading over the square
+  const rise = Math.min(6, Math.floor(f.t / 4));
+  const iconY = home.y * TILE - 6 - rise;
+  ctx.globalAlpha = f.t > life - 12 ? (life - f.t) / 12 : 1;
+  pixelIcon(ctx, f.kind === 'ward' ? 'leaf' : 'cloak', home.x * TILE + 2, Math.max(-2, iconY));
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * Paint a 12×12 UI icon straight onto the board, on whole pixels, over a dark
+ * offset shadow — a gold icon on bright grass is unreadable without one.
+ */
+function pixelIcon(ctx: CanvasRenderingContext2D, name: IconName, px: number, py: number) {
+  const icon = ICONS[name];
+  for (const [shade, ox, oy] of [[true, 1, 1], [false, 0, 0]] as const) {
+    icon.rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const c = icon.colors[row[x]];
+        if (!c) continue;
+        ctx.fillStyle = shade ? '#241533' : c;
+        ctx.fillRect(px + x + ox, py + y + oy, 1, 1);
+      }
+    });
   }
 }
 

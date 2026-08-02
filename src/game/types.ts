@@ -103,6 +103,8 @@ export interface FightEvent {
     | 'twisted'; // a thistle reached the friends' home row and promoted
   at: Vec;
   kind: Kind;
+  /** where the piece ended up, when the event moved it (the Cloak's drift home) */
+  to?: Vec;
 }
 
 /**

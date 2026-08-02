@@ -151,6 +151,17 @@ button, input, textarea, select { font-family: inherit; }
   cursor: pointer;
 }
 .trinket:active { border-color: var(--lantern); }
+/* Cloak/Ward carry one charge per clearing: a spent one dims so the badge never
+   promises a rescue it can't perform. */
+.trinket.spent { opacity: 0.42; }
+/* …and the badge that just fired flashes gold, tying the save on the board to
+   the thing in the header that caused it. */
+.trinket.fired { border-color: var(--lantern); }
+.trinket.fired.flash { animation: trinket-fire 260ms steps(1) 3; }
+@keyframes trinket-fire {
+  0% { background: var(--lantern); border-color: #fff3cf; }
+  50% { background: var(--panel-2); border-color: var(--lantern); }
+}
 
 /* movement upgrades are temporary — a tiny countdown of clearings left */
 .upgrade-left {
@@ -260,6 +271,23 @@ canvas {
   background: var(--banner-enemy-bg);
   background: color-mix(in srgb, var(--banner-enemy-bg) 82%, transparent);
 }
+/* A trinket save outranks the phase tint. A telegraphed capture just failed to
+   happen, and nothing else in the fight looks like that — so the banner turns
+   gold and flashes, instead of leaving the whole explanation to one line of
+   text the player may not read in time. */
+#status.saved {
+  border-color: var(--lantern);
+  background: #3a2f14;
+  background: color-mix(in srgb, #3a2f14 82%, transparent);
+}
+#status.saved.flash { animation: banner-save 300ms steps(1) 2; }
+#status.saved #status-line { color: var(--lantern); }
+#status.saved #hint { color: #fff3cf; }
+@keyframes banner-save {
+  0% { border-color: #fff3cf; background: #4a3a18; }
+  50% { border-color: var(--lantern); }
+}
+
 #status.won { border-color: #63a86a; background: #23331f; background: color-mix(in srgb, #23331f 82%, transparent); }
 #status.lost { border-color: #b05252; background: #362020; background: color-mix(in srgb, #362020 82%, transparent); }
 

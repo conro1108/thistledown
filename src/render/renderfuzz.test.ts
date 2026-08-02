@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest';
-import { draw, type PosOverrides } from './scene';
+import { draw, FX_LIFE, type FX, type PosOverrides } from './scene';
 import { movesFor } from '../game/board';
 import {
   createFight,
@@ -95,6 +95,29 @@ describe('render fuzz', () => {
           }
         } catch (err) {
           throw new Error(`seed ${seed} fight ${fi} turn ${turns}: ${(err as Error).stack}`);
+        }
+      }
+    }
+  });
+
+  // The save effect draws a trail between two arbitrary squares and floats an
+  // icon above the board's top edge — both are easy places to walk off the
+  // canvas or, in the trail's case, to loop forever on a zero-length path.
+  it('draws Ward and Cloak saves from every square to every other', () => {
+    const ctx = mockCtx();
+    const run = newRun(3);
+    const f = createFight(buildFightConfig(run).cfg, run.rng);
+    for (let y = 0; y < f.h; y++) {
+      for (let x = 0; x < f.w; x++) {
+        for (const t of [0, 1, 8, 16, 30, FX_LIFE.cloak - 1]) {
+          const fx: FX[] = [
+            { at: { x, y }, kind: 'ward', t },
+            // includes the degenerate case: rescued onto the square it stood on
+            { at: { x, y }, kind: 'cloak', t, to: { x: (x + 3) % f.w, y: f.h - 1 } },
+            { at: { x, y }, kind: 'cloak', t, to: { x, y } },
+            { at: { x, y }, kind: 'cloak', t }, // and a cloak with no destination at all
+          ];
+          draw(ctx, f, { selected: null, hover: null, fx }, 0);
         }
       }
     }
