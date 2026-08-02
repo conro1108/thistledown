@@ -171,7 +171,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 6,
     h: 6,
     acts: 1,
-    spread: { after: 12, every: 3, cap: 5 },
+    spread: { after: 18, every: 5, cap: 5 },
     core: [{ kind: 'thistle' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 1,
     pool: ['thistle'],
@@ -182,7 +182,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 6,
     h: 6,
     acts: 1,
-    spread: { after: 12, every: 3, cap: 5 },
+    spread: { after: 18, every: 5, cap: 5 },
     core: [{ kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
     budget: 2,
     pool: ['thistle'],
@@ -195,7 +195,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 6 },
+    spread: { after: 16, every: 5, cap: 6 },
     core: [{ kind: 'thistle' }, { kind: 'tumbleweed' }, { kind: 'tumbleweed', fickle: true }],
     budget: 3,
     pool: ['thistle'],
@@ -210,7 +210,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 9, every: 3, cap: 6 },
+    spread: { after: 15, every: 5, cap: 6 },
     core: [{ kind: 'heart' }, { kind: 'thistle' }, { kind: 'thistle' }, { kind: 'tumbleweed' }],
     budget: 1,
     pool: ['thistle'],
@@ -225,7 +225,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 6 },
+    spread: { after: 16, every: 5, cap: 6 },
     core: [{ kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
@@ -239,7 +239,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 7,
     h: 7,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 6 },
+    spread: { after: 16, every: 5, cap: 6 },
     core: [{ kind: 'tumbleweed', fickle: true }, { kind: 'creeper', fickle: true }, { kind: 'thistle' }],
     budget: 3,
     pool: ['thistle', 'tumbleweed'],
@@ -252,7 +252,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 7 },
+    spread: { after: 16, every: 5, cap: 7 },
     core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed'],
@@ -265,7 +265,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 7 },
+    spread: { after: 16, every: 5, cap: 7 },
     core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
@@ -280,7 +280,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 7 },
+    spread: { after: 16, every: 5, cap: 7 },
     core: [
       { kind: 'creeper', veiled: true },
       { kind: 'tumbleweed', veiled: true },
@@ -299,7 +299,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 11, every: 3, cap: 8 },
+    spread: { after: 17, every: 5, cap: 8 },
     core: [{ kind: 'golem', veiled: true }, { kind: 'golem' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
@@ -313,7 +313,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 10, every: 3, cap: 8 },
+    spread: { after: 16, every: 5, cap: 8 },
     core: [{ kind: 'golem' }, { kind: 'creeper' }, { kind: 'tumbleweed' }],
     budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
@@ -329,7 +329,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 8 },
+    spread: { after: 16, every: 5, cap: 8 },
     core: [
       { kind: 'heart' },
       { kind: 'golem' },
@@ -349,7 +349,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 2,
-    spread: { after: 10, every: 3, cap: 8 },
+    spread: { after: 16, every: 5, cap: 8 },
     core: [{ kind: 'gloom', veiled: true }, { kind: 'creeper' }, { kind: 'thistle' }, { kind: 'thistle' }],
     budget: 4,
     pool: ['thistle', 'tumbleweed', 'creeper'],
@@ -363,7 +363,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 10, every: 3, cap: 8 },
+    spread: { after: 16, every: 5, cap: 8 },
     core: [{ kind: 'golem' }, { kind: 'golem', veiled: true }, { kind: 'creeper', fickle: true }],
     budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
@@ -377,7 +377,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 10, every: 3, cap: 9 },
+    spread: { after: 16, every: 5, cap: 9 },
     core: [{ kind: 'gloom' }, { kind: 'golem' }, { kind: 'tumbleweed', veiled: true }, { kind: 'thistle' }],
     budget: 5,
     pool: ['thistle', 'tumbleweed', 'creeper'],
@@ -393,7 +393,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 10, every: 3, cap: 9 },
+    spread: { after: 16, every: 5, cap: 9 },
     core: [
       { kind: 'heart' },
       { kind: 'golem' },
@@ -414,7 +414,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 9, every: 3, cap: 9 },
+    spread: { after: 15, every: 5, cap: 9 },
     core: [
       { kind: 'golem', veiled: true },
       { kind: 'creeper', veiled: true },
@@ -434,7 +434,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 9, every: 3, cap: 9 },
+    spread: { after: 15, every: 5, cap: 9 },
     core: [
       { kind: 'golem', veiled: true },
       { kind: 'creeper', veiled: true },
@@ -454,7 +454,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 9, every: 3, cap: 9 },
+    spread: { after: 15, every: 5, cap: 9 },
     core: [
       { kind: 'gloom', veiled: true },
       { kind: 'gloom' },
@@ -475,7 +475,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 3,
-    spread: { after: 9, every: 3, cap: 9 },
+    spread: { after: 15, every: 5, cap: 9 },
     core: [
       { kind: 'heart' },
       { kind: 'gloom', veiled: true },
@@ -497,7 +497,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 4,
-    spread: { after: 8, every: 3, cap: 10 },
+    spread: { after: 14, every: 5, cap: 10 },
     core: [
       { kind: 'gloom', veiled: true },
       { kind: 'golem', veiled: true },
@@ -517,7 +517,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 4,
-    spread: { after: 8, every: 3, cap: 10 },
+    spread: { after: 14, every: 5, cap: 10 },
     core: [
       { kind: 'golem', veiled: true },
       { kind: 'golem', veiled: true },
@@ -537,7 +537,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 4,
-    spread: { after: 8, every: 3, cap: 10 },
+    spread: { after: 14, every: 5, cap: 10 },
     core: [
       { kind: 'gloom', veiled: true },
       { kind: 'gloom', veiled: true },
@@ -558,7 +558,7 @@ const TEMPLATES: FightTemplate[] = [
     w: 8,
     h: 8,
     acts: 4,
-    spread: { after: 8, every: 3, cap: 10 },
+    spread: { after: 14, every: 5, cap: 10 },
     core: [
       { kind: 'heart' },
       { kind: 'gloom', veiled: true },
@@ -691,6 +691,17 @@ export function offerRecruits(run: RunState): Kind[] {
   const out: Kind[] = [];
   while (out.length < want && bag.length) {
     out.push(bag.splice(Math.floor(run.rng() * bag.length), 1)[0]);
+  }
+  // A band with no straight-lane critter can chase the Heart around a clearing
+  // forever without ever fencing it in — and the luck of the draw could deny one
+  // for a whole region. Once the roster is short a lane-holder, one of the
+  // offers is always a Rumble.
+  if (
+    pool.includes('rumble') &&
+    !out.includes('rumble') &&
+    !run.companions.some((c) => c.kind === 'rumble' || c.kind === 'duchess')
+  ) {
+    out[out.length - 1] = 'rumble';
   }
   return out;
 }

@@ -1027,11 +1027,12 @@ describe('the bramble spreads', () => {
   });
 
   it('holds reinforcements until the bramble is thinned below the material gate', () => {
-    // two hoppers = 60 opening material; the default 0.6 gate arms at 36
+    // three hoppers = 90 opening material; the default 0.45 gate arms at 40.5
     const s = fight(
       [{ kind: 'keeper', x: 4, y: 7 }],
       [
         { kind: 'hopper', x: 7, y: 0 },
+        { kind: 'hopper', x: 4, y: 0 },
         { kind: 'hopper', x: 0, y: 0 },
       ],
       1,
@@ -1039,13 +1040,14 @@ describe('the bramble spreads', () => {
       8,
       { spread: { after: 2, every: 1, cap: 6 } }, // default gate
     );
-    expect(s.startMaterial).toBe(60);
+    expect(s.startMaterial).toBe(90);
     resolveEnemyTurn(s); // turn 2 = after: the clock ticks, but full strength holds it
     expect(s.pendingSprout).toBeNull();
-    // the player picks one off — now the bramble is under the gate
-    const victim = s.pieces.find((p) => p.kind === 'hopper')!;
-    s.pieces = s.pieces.filter((p) => p.id !== victim.id);
-    resolveEnemyTurn(s); // turn 3: thinned to 30 < 36, reinforcements arm
+    // the player picks two off — now the bramble is under the gate
+    for (const victim of s.pieces.filter((p) => p.kind === 'hopper').slice(0, 2)) {
+      s.pieces = s.pieces.filter((q) => q.id !== victim.id);
+    }
+    resolveEnemyTurn(s); // turn 3: thinned to 30 < 40.5, reinforcements arm
     expect(s.pendingSprout).not.toBeNull();
     expect(s.events.some((ev) => ev.type === 'stir')).toBe(true);
   });

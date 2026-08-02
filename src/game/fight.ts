@@ -16,8 +16,13 @@ export interface Spawn {
 
 export const NAIVE_DIALS: AiDials = { foresight: 0, caution: 0, bloodlust: 1, temperature: 0.5 };
 
-/** Spread stays dormant until the bramble is thinned to this share of its opening. */
-export const DEFAULT_SPREAD_GATE = 0.6;
+/**
+ * Spread stays dormant until the bramble is thinned to this share of its
+ * opening. Deliberately below half: playtesters read reinforcements as the
+ * game piling on while they were still fighting, so the clock now only starts
+ * counting once the clearing is visibly going the player's way.
+ */
+export const DEFAULT_SPREAD_GATE = 0.45;
 
 /** Chess piece values in disguise — the exchange math the dials reason with. */
 export const PIECE_VALUE: Record<Kind, number> = {

@@ -67,13 +67,14 @@ const MOVE_TAG: Partial<Record<Kind, string>> = {
 };
 
 const OBJECTIVE = 'Catch every bramble creature to win the clearing.';
-const DEFAULT_HINT = 'Tap a friend (on the board or below), then tap a glowing square to move them.';
+const DEFAULT_HINT =
+  'Tap a friend (on the board or below), then tap a glowing square — or just drag them there.';
 const PAUSE_MS = 340; // beat after your move, before the bramble acts
 const TWEEN_MS = 190; // how long their slide/leap takes to draw
 const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 // v5: movement upgrades + expanded, region-gated trinkets shift the run's RNG
 // draw order, so older decision logs no longer replay faithfully — let them go
-const SAVE_KEY = 'overgrown.save.v5';
+const SAVE_KEY = 'overgrown.save.v6'; // v6: the spread clock was retuned, so old logs replay differently
 const SCORES_KEY = 'overgrown.scores.v1';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -524,6 +525,7 @@ function enterFight(resume: boolean) {
   inspect = null;
   fx = [];
   tweens = [];
+  cancelBeat(); // a beat left over from the last clearing must never fire into this one
   frozenTelegraphs = null;
   blockedNote = null;
   tempoKind = null;
@@ -555,7 +557,7 @@ function maybeAutoWait() {
   if (sess.resolveDue || sess.stage !== 'fight') return;
   if (fight.pieces.some((p) => p.side === 'friend' && movesFor(fight!, p).length > 0)) return;
   hintEl.innerHTML = 'Everyone is hemmed in — nowhere to step! Hold tight…';
-  setTimeout(beginEnemyTurn, 900);
+  scheduleBeat(900, beginEnemyTurn); // tappable-through, like the rest of the beat
 }
 
 /** The fight just ended in the session — show the aftermath. */
@@ -785,13 +787,28 @@ function promotionChoice() {
   const options: PromotionKind[] = ['hopper', 'slink', 'rumble'];
   // the Duchess only answers late in the run
   if (run && run.fightIndex >= 4) options.push('duchess');
+  // Penning the Heart in takes straight lanes: a band of nothing but leapers
+  // and diagonal slinkers can chase it around a clearing forever without ever
+  // building a wall. When the player has no lane-holder on the field, lead with
+  // the Rumble and say plainly why — this is the choice that decides whether a
+  // beginner's run stays winnable.
+  const laneHolder = fight?.pieces.some(
+    (p) => p.side === 'friend' && (p.kind === 'rumble' || p.kind === 'duchess'),
+  );
+  if (!laneHolder) options.sort((a, b) => (a === 'rumble' ? -1 : b === 'rumble' ? 1 : 0));
   showChoiceScene(
     `Something blossoms ${iconHTML('sparkle', 'p2')}`,
     'Crossing the whole meadow changes a critter. Who do they become?',
     options.map((kind) => ({
       kind,
-      label: KIND_INFO[kind].title,
-      detail: KIND_INFO[kind].blurb,
+      label:
+        !laneHolder && kind === 'rumble'
+          ? `${KIND_INFO[kind].title} — the safe pick`
+          : KIND_INFO[kind].title,
+      detail:
+        !laneHolder && kind === 'rumble'
+          ? `${KIND_INFO[kind].blurb} Straight lanes are what fence the Heart in — right now nobody in your band holds one.`
+          : KIND_INFO[kind].blurb,
       fn: () => {
         doEntry({ t: 'promote', kind });
         drainEvents();
@@ -908,6 +925,23 @@ function describe(kind: Kind): string {
   return `${info.title}: ${info.blurb}`;
 }
 
+/**
+ * Who on the other side moves exactly like this. The corner pip already pairs
+ * them on the board; tapping either one says it in words.
+ */
+const TWIN: Partial<Record<Kind, Kind>> = {
+  sprout: 'thistle',
+  thistle: 'sprout',
+  hopper: 'tumbleweed',
+  tumbleweed: 'hopper',
+  slink: 'creeper',
+  creeper: 'slink',
+  rumble: 'golem',
+  golem: 'rumble',
+  duchess: 'gloom',
+  gloom: 'duchess',
+};
+
 /** "a Sprout and 2 Hoppers" — companions listed by type, names are campfire flavor only. */
 function listKinds(kinds: Kind[]): string {
   const counts = new Map<Kind, number>();
@@ -938,6 +972,13 @@ function describeInFight(p: {
   spry?: boolean;
 }): string {
   let txt = describe(p.kind);
+  const twin = TWIN[p.kind];
+  if (twin) {
+    txt +=
+      p.side === 'bramble'
+        ? ` Same pip as your ${KIND_INFO[twin].title} — it moves exactly the same.`
+        : ` Same pip as their ${KIND_INFO[twin].title} — they move exactly the same.`;
+  }
   if (p.side === 'bramble') {
     if (p.veiled) txt += ' Shrouded — no arrow. The lit squares are everywhere it could strike.';
     else if (p.fickle) txt += ' Fickle — two arrows, and it takes whichever looks tastier.';
@@ -988,6 +1029,46 @@ function proceedAfterPlayerAction() {
   beginEnemyTurn();
 }
 
+// ---------- the enemy beat, and skipping it ----------
+
+/**
+ * The enemy turn plays out as timed steps. Each one is parked here as well as
+ * on a timer, so a player who has already read the board can tap through it
+ * instead of waiting — the "I went to grab a piece and it was too early" feel
+ * was this animation holding the input lock.
+ */
+let pendingBeat: (() => void) | null = null;
+let beatTimer: number | null = null;
+
+function scheduleBeat(ms: number, step: () => void) {
+  if (beatTimer != null) clearTimeout(beatTimer);
+  pendingBeat = step;
+  beatTimer = window.setTimeout(() => {
+    beatTimer = null;
+    pendingBeat = null;
+    step();
+  }, ms);
+}
+
+function cancelBeat() {
+  if (beatTimer != null) clearTimeout(beatTimer);
+  beatTimer = null;
+  pendingBeat = null;
+}
+
+/** Drop whatever the enemy beat is still waiting on and land on the result. */
+function skipEnemyBeat() {
+  // each step can queue the next one; the chain is two long, so a small cap is
+  // plenty and guarantees this can never spin
+  for (let i = 0; i < 4 && pendingBeat; i++) {
+    const step = pendingBeat;
+    if (beatTimer != null) clearTimeout(beatTimer);
+    beatTimer = null;
+    pendingBeat = null;
+    step();
+  }
+}
+
 /**
  * Pause on the pre-resolve board so the player registers the threat, resolve
  * the enemy telegraphs, then tween pieces into their new squares — a
@@ -1015,7 +1096,7 @@ function beginEnemyTurn() {
   );
   frozenTelegraphs = snapTelegraphs;
 
-  setTimeout(() => {
+  scheduleBeat(PAUSE_MS, () => {
     if (!fight) return;
     blockedNote = anyAction
       ? stolen
@@ -1040,21 +1121,18 @@ function beginEnemyTurn() {
     tweenDur = TWEEN_MS;
     refreshHud();
 
-    setTimeout(
-      () => {
-        tweens = [];
-        frozenTelegraphs = null;
-        phase = 'player';
-        if (fight!.status === 'playing') hintEl.innerHTML = blockedNote ?? DEFAULT_HINT;
-        refreshHud();
-        if (fight!.status !== 'playing') {
-          playOutcome();
-          setTimeout(endOfFightUi, 350);
-        } else maybeAutoWait();
-      },
-      tweens.length ? TWEEN_MS : 60,
-    );
-  }, PAUSE_MS);
+    scheduleBeat(tweens.length ? TWEEN_MS : 60, () => {
+      tweens = [];
+      frozenTelegraphs = null;
+      phase = 'player';
+      if (fight!.status === 'playing') hintEl.innerHTML = blockedNote ?? DEFAULT_HINT;
+      refreshHud();
+      if (fight!.status !== 'playing') {
+        playOutcome();
+        setTimeout(endOfFightUi, 350);
+      } else maybeAutoWait();
+    });
+  });
 }
 
 // ---------- history: step back through the clearing ----------
@@ -1449,25 +1527,60 @@ function cellFromEvent(ev: MouseEvent): Vec | null {
   return { x, y };
 }
 
-canvas.addEventListener('click', (ev) => {
+/** Pointer position in canvas (board) pixels — the drag's own coordinate space. */
+function boardPixel(ev: PointerEvent): Vec | null {
+  if (!fight) return null;
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: ((ev.clientX - r.left) / r.width) * fight.w * TILE,
+    y: ((ev.clientY - r.top) / r.height) * fight.h * TILE,
+  };
+}
+
+/**
+ * A friend being dragged. `moved` stays false until the pointer travels far
+ * enough to count as a drag — below that it's a tap, and tap-then-tap keeps
+ * working exactly as it always has.
+ */
+let drag: { id: number; from: Vec; at: Vec; moved: boolean } | null = null;
+
+/** How far (in board pixels) a pointer must travel before it's a drag, not a tap. */
+const DRAG_SLOP = 3;
+/** How high the carried critter floats above the finger, so it stays visible. */
+const DRAG_LIFT = 6;
+
+function legalTarget(pieceId: number, c: Vec): boolean {
+  if (!fight) return false;
+  const p = fight.pieces.find((q) => q.id === pieceId);
+  return !!p && movesFor(fight, p).some((m) => m.x === c.x && m.y === c.y);
+}
+
+canvas.addEventListener('pointerdown', (ev) => {
   unlockAudio(); // first tap on the board is a valid gesture to start audio
+  // A tap that lands mid-animation isn't "too early" any more: it lands the
+  // bramble's move now and then does what it was going to do.
+  if (pendingBeat) skipEnemyBeat();
   if (history || !fight || fight.status !== 'playing' || phase !== 'player') return;
   const c = cellFromEvent(ev);
   if (!c) return;
 
-  if (selected != null) {
-    const sel = fight.pieces.find((p) => p.id === selected);
-    if (sel && movesFor(fight, sel).some((m) => m.x === c.x && m.y === c.y)) {
-      attemptMove(selected, c);
-      return;
-    }
+  // second tap of a tap-tap move: go on pointerdown, not on click — the wait
+  // for the up-event is a good chunk of what read as sluggish
+  if (selected != null && legalTarget(selected, c)) {
+    attemptMove(selected, c);
+    return;
   }
 
   const p = pieceAt(fight, c.x, c.y);
   inspect = c;
   if (p) {
     selected = p.side === 'friend' ? p.id : null;
-    if (p.side === 'friend') playSfx('ui'); // picking a friend up
+    if (p.side === 'friend') {
+      playSfx('ui'); // picking a friend up
+      const at = boardPixel(ev);
+      if (at) drag = { id: p.id, from: at, at, moved: false };
+      canvas.setPointerCapture(ev.pointerId);
+    }
     hintEl.innerHTML = describeInFight(p);
   } else {
     selected = null;
@@ -1477,10 +1590,35 @@ canvas.addEventListener('click', (ev) => {
   refreshHud();
 });
 
-canvas.addEventListener('mousemove', (ev) => {
+canvas.addEventListener('pointermove', (ev) => {
   if (!fight || phase !== 'player') return;
+  if (drag) {
+    const at = boardPixel(ev);
+    if (!at) return;
+    drag.at = at;
+    if (Math.hypot(at.x - drag.from.x, at.y - drag.from.y) > DRAG_SLOP) drag.moved = true;
+    const c = cellFromEvent(ev);
+    if (c) inspect = c;
+    return;
+  }
   const c = cellFromEvent(ev);
   if (c && selected == null) inspect = c;
+});
+
+canvas.addEventListener('pointerup', (ev) => {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
+  if (!d.moved) return; // a tap: the piece stays picked up, waiting for its square
+  const c = cellFromEvent(ev);
+  // dropped somewhere it can't go — the critter hops back and stays selected,
+  // so a misjudged drag costs nothing
+  if (c && legalTarget(d.id, c)) attemptMove(d.id, c);
+});
+
+canvas.addEventListener('pointercancel', () => {
+  drag = null;
 });
 
 /** The outcome jingle, once, when a fight settles into won/lost. */
@@ -1672,6 +1810,16 @@ function renderFrame(time: number) {
       const t = Math.min(1, (performance.now() - tweenStart) / tweenDur);
       overrides = new Map(tweens.map((tw) => [tw.id, lerp(tw.from, tw.to, t)]));
     }
+    // a carried critter rides the pointer, centred and lifted clear of the
+    // fingertip. Cell coords stay fractional here; the renderer rounds them
+    // onto whole pixels, so the pixel grid survives the drag.
+    if (drag?.moved) {
+      overrides = new Map(overrides);
+      overrides.set(drag.id, {
+        x: (drag.at.x - TILE / 2) / TILE,
+        y: (drag.at.y - TILE / 2 - DRAG_LIFT) / TILE,
+      });
+    }
     draw(
       ctx,
       fight,
@@ -1679,6 +1827,7 @@ function renderFrame(time: number) {
         selected,
         hover: inspect,
         fx,
+        carried: drag?.moved ? drag.id : undefined,
         posOverrides: overrides,
         telegraphOverride: frozenTelegraphs ?? undefined,
         revealVeiled: revealVeiled || undefined,

@@ -1,6 +1,6 @@
 import { isPawn, isSlider, movesFor, pieceAt, threatsFor } from '../game/board';
 import type { FightState, Telegraph, Vec } from '../game/types';
-import { drawSprite } from './sprites';
+import { drawRankBadge, drawSprite } from './sprites';
 
 export const TILE = 16;
 
@@ -25,6 +25,8 @@ export interface View {
   revealVeiled?: boolean;
   /** the region's two checker greens for the board tiles */
   ground?: [string, string];
+  /** a piece in hand: drawn last so it rides over everything it passes */
+  carried?: number;
 }
 
 const GRASS_A = '#87aa56';
@@ -141,8 +143,13 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     }
   }
 
-  // pieces, with a 1px integer idle bob (never fractional — pixel grid is sacred)
-  for (const p of s.pieces) {
+  // pieces, with a 1px integer idle bob (never fractional — pixel grid is sacred).
+  // A carried piece goes last: it should pass over its neighbours, not under.
+  const order =
+    v.carried == null
+      ? s.pieces
+      : [...s.pieces.filter((p) => p.id !== v.carried), ...s.pieces.filter((p) => p.id === v.carried)];
+  for (const p of order) {
     const pos = v.posOverrides?.get(p.id) ?? p;
     const px = Math.round(pos.x * TILE);
     const py = Math.round(pos.y * TILE);
@@ -151,6 +158,10 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     // ends up looking like a plinth
     const bob = (Math.floor(time / 450) + p.id) % 2 === 0 ? 0 : -1;
     drawSprite(ctx, p.kind, px + 2, py + 2 + bob);
+    // the rank chip rides along the tile's bottom edge, not on the critter, so
+    // it stays put while they bob — a steady place to read "these two are the
+    // same". Inset from the corner so it never buries a selection marker.
+    drawRankBadge(ctx, p.kind, p.side, px + 2, py + 11);
   }
 
   // capture / shaken / blocked effects

@@ -45,6 +45,19 @@ describe('run', () => {
     }
   });
 
+  it('reinforcements stay a late, occasional nudge — never an early drip', () => {
+    const run = newRun(7);
+    for (let i = 0; i < run.fights.length; i++) {
+      run.fightIndex = i;
+      const { cfg } = buildFightConfig(run);
+      if (!cfg.spread) continue;
+      // playtesters read the old clock (turn 8-12, every 3) as the game piling
+      // on. Reinforcements are a stall valve, not a pace-setter.
+      expect(cfg.spread.after).toBeGreaterThanOrEqual(14);
+      expect(cfg.spread.every).toBeGreaterThanOrEqual(5);
+    }
+  });
+
   it('the Bramble Heart never spawns already in check — a long-range friend sharing its lane at kickoff would give the fight away for free', () => {
     for (let seed = 0; seed < 200; seed++) {
       const run = newRun(seed);
@@ -120,6 +133,26 @@ describe('run', () => {
     }
     const names = run.companions.map((c) => c.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('a band with no straight-lane critter is always offered a Rumble', () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const run = newRun(seed);
+      run.fightIndex = 2; // past the two-kind on-ramp, so rumble is in the pool
+      const offers = offerRecruits(run);
+      expect(offers).toContain('rumble');
+      expect(new Set(offers).size).toBe(offers.length);
+    }
+  });
+
+  it('once a lane-holder is in the band, offers go back to a free draw', () => {
+    const run = newRun(3);
+    run.fightIndex = 2;
+    recruit(run, 'rumble');
+    // the guarantee is spent — over many draws something other than a Rumble shows up
+    const seen = new Set<string>();
+    for (let i = 0; i < 20; i++) for (const k of offerRecruits(run)) seen.add(k);
+    expect([...seen].some((k) => k !== 'rumble')).toBe(true);
   });
 
   it('camp: due before each region boss, heal recovers everyone, honeycake sticks', () => {

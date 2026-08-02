@@ -67,6 +67,22 @@ describe('render fuzz', () => {
               continue;
             }
             draw(ctx, f, { selected: null, hover: f.pieces[0] ?? null, fx: [], telegraphOverride: undefined }, 0);
+            // and again mid-drag: a friend carried off-grid, between squares
+            const carried = f.pieces.find((p) => p.side === 'friend');
+            if (carried) {
+              draw(
+                ctx,
+                f,
+                {
+                  selected: carried.id,
+                  hover: null,
+                  fx: [],
+                  carried: carried.id,
+                  posOverrides: new Map([[carried.id, { x: carried.x + 0.4, y: carried.y - 0.37 }]]),
+                },
+                0,
+              );
+            }
             const opts: { id: number; to: Vec }[] = [];
             for (const p of f.pieces)
               if (p.side === 'friend') for (const m of movesFor(f, p)) opts.push({ id: p.id, to: m });

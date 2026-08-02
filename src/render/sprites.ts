@@ -219,6 +219,68 @@ export const SPRITES: Record<Kind, Sprite> = {
   },
 };
 
+/**
+ * The rank badge: a 3×3 pip that says *how this creature moves*, drawn
+ * identically on both sides and tinted by team. Two critters wearing the same
+ * pip are the same piece — the thing playtesters could not read off the art,
+ * since a Hopper and a Tumbleweed have nothing visual in common.
+ *
+ * The shapes are the movement itself: a dot that goes one square, an L, a
+ * diagonal cross, a straight-lane plus, and a filled block for "everything".
+ * The Keeper and the Bramble Heart get none — there is exactly one of each on
+ * the board and neither is ever mistaken for anything else.
+ */
+export const RANK_BADGE: Partial<Record<Kind, string[]>> = {
+  sprout: ['...', '.#.', '...'],
+  thistle: ['...', '.#.', '...'],
+  hopper: ['#..', '#..', '##.'],
+  tumbleweed: ['#..', '#..', '##.'],
+  slink: ['#.#', '.#.', '#.#'],
+  creeper: ['#.#', '.#.', '#.#'],
+  rumble: ['.#.', '###', '.#.'],
+  golem: ['.#.', '###', '.#.'],
+  duchess: ['###', '###', '###'],
+  gloom: ['###', '###', '###'],
+};
+
+/** Lantern-warm for the friends, dusk-purple for the bramble. */
+const BADGE_INK: Record<'friend' | 'bramble', string> = {
+  friend: '#ffd966',
+  bramble: '#d9a2ff',
+};
+
+/**
+ * The chip the pip sits on — dark enough that the glyph reads over any sprite,
+ * but translucent and corner-clipped so it sits under the art like a little
+ * enamel badge instead of a black sticker.
+ */
+const BADGE_PLATE = 'rgba(24, 16, 34, 0.82)';
+
+/**
+ * Paint the rank badge as a 5×5 chip: a dark plate with the pip inked on top.
+ * A bare glyph over the art read as a stray pixel of dirt, so the plate is what
+ * makes it a label. `px`/`py` are the chip's top-left in canvas pixels.
+ */
+export function drawRankBadge(
+  ctx: CanvasRenderingContext2D,
+  kind: Kind,
+  side: 'friend' | 'bramble',
+  px: number,
+  py: number,
+) {
+  const rows = RANK_BADGE[kind];
+  if (!rows) return;
+  ctx.fillStyle = BADGE_PLATE;
+  ctx.fillRect(px + 1, py, 3, 5); // the plate, minus its four corner pixels
+  ctx.fillRect(px, py + 1, 5, 3);
+  ctx.fillStyle = BADGE_INK[side];
+  for (let y = 0; y < rows.length; y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      if (rows[y][x] === '#') ctx.fillRect(px + 1 + x, py + 1 + y, 1, 1);
+    }
+  }
+}
+
 export function drawSprite(ctx: CanvasRenderingContext2D, kind: Kind, px: number, py: number) {
   const spr = SPRITES[kind];
   for (let y = 0; y < spr.rows.length; y++) {
