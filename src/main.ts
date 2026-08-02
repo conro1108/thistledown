@@ -1778,6 +1778,9 @@ function sizeCanvas() {
 
 window.addEventListener('resize', sizeCanvas);
 window.addEventListener('orientationchange', () => requestAnimationFrame(sizeCanvas));
+// iOS resizes the visual viewport (toolbars, safe-area changes) without always
+// firing a window resize — the backdrop has to follow or it leaves a gap.
+window.visualViewport?.addEventListener('resize', () => requestAnimationFrame(sizeCanvas));
 if ('ResizeObserver' in window) new ResizeObserver(sizeCanvas).observe(boardAreaEl);
 
 let frameErrLogged = false;

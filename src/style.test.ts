@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import css from './style.css?raw';
+
+// Read from disk, not `import css from './style.css?raw'` — Vitest stubs CSS
+// imports to an empty string, which quietly made every check below vacuous.
+const css = readFileSync(new URL('./style.css', import.meta.url), 'utf8');
 
 /**
  * The chrome has to obey the same rule as the renderer: integer pixels only.
@@ -45,5 +49,29 @@ describe('style.css stays on the pixel grid', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * The page must be a fixed pane, not a scroller. When the document could be
+ * taller than the visible viewport, iOS would scroll or re-inset the whole app
+ * mid-game — the screen visibly shifted down and clipped the roster.
+ */
+describe('the app pane cannot scroll or zoom away', () => {
+  const rule = (sel: string) => rules().find(([s]) => s === sel)?.[1] ?? '';
+
+  it('pins body to the viewport with no scrolling or double-tap zoom', () => {
+    const body = rule('body');
+    expect(body).toMatch(/position:\s*fixed/);
+    expect(body).toMatch(/inset:\s*0/);
+    expect(body).toMatch(/overflow:\s*hidden/);
+    expect(body).toMatch(/touch-action:\s*manipulation/);
+  });
+
+  it('sizes #app from the fixed body, never from dvh', () => {
+    const appRule = rule('#app');
+    expect(appRule).toMatch(/position:\s*absolute/);
+    expect(appRule).toMatch(/inset:\s*0/);
+    expect(appRule).not.toMatch(/dvh/);
   });
 });
