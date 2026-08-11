@@ -374,7 +374,46 @@ canvas {
   overflow-y: auto;
   box-shadow: var(--shadow-card);
 }
+/* cards pop in with a two-step pixel hop, never a smooth glide */
+.card { animation: card-in 120ms steps(2, end); }
+@keyframes card-in {
+  from { transform: translateY(6px); opacity: 0; }
+}
+
 .card h2 { margin: 0 0 8px; color: var(--lantern); font-size: var(--t-lg); }
+
+/* ---------- title card: the shop window ---------- */
+
+.card.title { padding: 24px 20px; }
+.wordmark {
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--lantern);
+  /* hard offset shadow, like every other pixel in the chrome */
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+.cast {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.cast canvas.mini {
+  width: 36px;
+  height: 36px;
+  image-rendering: pixelated;
+  animation: cast-bob 900ms steps(1) infinite;
+}
+/* off-beat bobs so the band idles like the board does, not like a chorus line */
+.cast canvas.mini:nth-child(2n) { animation-delay: 450ms; }
+@keyframes cast-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); } /* one sprite pixel at 3× */
+}
+.cast-gap { width: 12px; }
 .card p { color: var(--ink); line-height: 1.5; font-size: var(--t-md); }
 .card .objective {
   display: block;
@@ -558,5 +597,22 @@ button:not(:disabled):active {
   transform: translateY(2px);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
-.btns button:hover { background: var(--panel-2); border-color: var(--lantern); }
+/* keyboard/desktop crispness: a lantern ring, only when focus is earned */
+button:focus-visible {
+  outline: var(--edge-w) solid var(--lantern);
+  outline-offset: 2px;
+}
+/* the primary path onward is lit before you touch it */
+.btns button.primary {
+  border-color: var(--lantern);
+  color: var(--lantern);
+  font-weight: 700;
+}
+/* hover states only where a pointer that can hover actually exists */
+@media (hover: hover) {
+  .btns button:hover,
+  .opt:hover,
+  .trinket:hover,
+  .chip:not(:disabled):hover { border-color: var(--lantern); }
+}
 button small { display: block; color: var(--ink-soft); margin-top: 2px; }

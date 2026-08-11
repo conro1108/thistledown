@@ -125,15 +125,27 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     ctx.fillRect(p.x * TILE + 9 - wob, p.y * TILE + 8, 2, 2);
   }
 
-  // selected friend: its legal moves
+  // Selected friend: its legal moves. The default hint promises "glowing
+  // squares", so they must actually glow — a fat dot with a dark offset
+  // shadow for a plain step, gold catch-brackets where a bramble creature can
+  // be taken, and a slow shimmer on the wash (the idle-bob clock) so live
+  // choices read as live even in a still screenshot.
   if (v.selected != null) {
     const p = s.pieces.find((q) => q.id === v.selected);
     if (p) {
+      const shimmer = Math.floor(time / 450) % 2 === 0;
       for (const m of movesFor(s, p)) {
-        ctx.fillStyle = 'rgba(255, 217, 102, 0.35)';
+        ctx.fillStyle = shimmer ? 'rgba(255, 217, 102, 0.44)' : 'rgba(255, 217, 102, 0.32)';
         ctx.fillRect(m.x * TILE + 1, m.y * TILE + 1, TILE - 2, TILE - 2);
-        ctx.fillStyle = '#ffd966';
-        ctx.fillRect(m.x * TILE + 7, m.y * TILE + 7, 2, 2);
+        if (pieceAt(s, m.x, m.y)) {
+          // a catch: brackets, not a dot — the square already has a face in it
+          corners(ctx, m.x, m.y, '#ffd966');
+        } else {
+          ctx.fillStyle = '#241533';
+          ctx.fillRect(m.x * TILE + 7, m.y * TILE + 7, 4, 4);
+          ctx.fillStyle = '#ffd966';
+          ctx.fillRect(m.x * TILE + 6, m.y * TILE + 6, 4, 4);
+        }
       }
       corners(ctx, p.x, p.y, '#ffd966');
     }

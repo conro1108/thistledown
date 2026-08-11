@@ -414,6 +414,33 @@ const DIAG_D = [
   [-1, -1],
 ];
 
+// ---------- first-run coach: one bubble per concept, once ever ----------
+
+const COACH_KEY = 'overgrown.coach.v1';
+type CoachId = 'select' | 'arrows';
+let coachSeen: Record<string, boolean> = {};
+try {
+  coachSeen = JSON.parse(localStorage.getItem(COACH_KEY) ?? '{}') ?? {};
+} catch {
+  /* corrupt — the coach just starts over */
+}
+
+/**
+ * The line for a concept the player is meeting right now, or null if they've
+ * met it before. Consuming it marks it seen forever (across runs — per
+ * DESIGN.md the budget is one speech bubble per concept, ever).
+ */
+function coach(id: CoachId, text: string): string | null {
+  if (coachSeen[id]) return null;
+  coachSeen[id] = true;
+  try {
+    localStorage.setItem(COACH_KEY, JSON.stringify(coachSeen));
+  } catch {
+    /* fine — they'll meet the bubble again next visit */
+  }
+  return text;
+}
+
 // ---------- run flow ----------
 
 function title() {
@@ -439,15 +466,60 @@ function title() {
     sub: saved ? 'The old path grows over.' : undefined,
     fn: startRun,
   });
+  showTitle(choices);
+}
+
+/** A 12×12 critter face for the title's cast strip. */
+function castFace(kind: Kind): HTMLCanvasElement {
+  const cv = document.createElement('canvas');
+  cv.className = 'mini';
+  cv.width = 12;
+  cv.height = 12;
+  drawSprite(cv.getContext('2d')!, kind, 0, 0);
+  return cv;
+}
+
+/**
+ * The title is a shop window, not a dialog box: a wordmark, the band itself
+ * (art says "cozy critters" faster than any copy), one flavor line, and the
+ * single rule a stranger needs before their first tap. showOverlay stays the
+ * workhorse for every other card.
+ */
+function showTitle(choices: Choice[]) {
+  overlayEl.innerHTML = `<div class="card title">
+    <h1 class="wordmark">Overgrown</h1>
+    <div class="cast"></div>
+    <p class="scene-body">The meadow is overgrown, and the Keeper’s lantern is lit.
+      Lead your friends in and take it back, one clearing at a time.
+      <span class="objective">${iconHTML('daisy')} Every bramble creature shows its next
+      move. Catch one by landing on its square.</span></p>
+    <div class="btns"></div></div>`;
+  // the band on the path, and one thistle waiting across the gap
+  const cast = overlayEl.querySelector('.cast')!;
+  const band: Kind[] = ['sprout', 'hopper', 'keeper', 'slink', 'rumble'];
+  for (const k of band) cast.append(castFace(k));
+  const gap = document.createElement('span');
+  gap.className = 'cast-gap';
+  cast.append(gap, castFace('thistle'));
   const runBest = loadScores().run;
-  const bestNote = runBest !== undefined ? ` <span class="objective">${iconHTML('trophy')} Best run: ${plural(runBest, 'move')}</span>` : '';
-  showOverlay(
-    `Overgrown ${iconHTML('daisy', 'p2')}`,
-    'The meadow is overgrown and the Keeper’s lantern is lit. Lead your friends, ' +
-      'read the bramble’s intentions, and take the meadow back one clearing at a time.' +
-      bestNote,
-    choices,
-  );
+  if (runBest !== undefined) {
+    const best = document.createElement('span');
+    best.className = 'scene-note';
+    best.innerHTML = `${iconHTML('trophy')} Best run: ${plural(runBest, 'move')}`;
+    overlayEl.querySelector('.scene-body')!.append(best);
+  }
+  const btns = overlayEl.querySelector('.btns')!;
+  choices.forEach((c, i) => {
+    const b = document.createElement('button');
+    if (i === 0) b.className = 'primary'; // the lit path onward
+    b.innerHTML = c.sub ? `${c.label}<small>${c.sub}</small>` : c.label;
+    b.onclick = () => {
+      overlayEl.classList.add('hidden');
+      c.fn();
+    };
+    btns.append(b);
+  });
+  overlayEl.classList.remove('hidden');
 }
 
 function startRun() {
@@ -994,8 +1066,27 @@ function selectPiece(pieceId: number) {
   if (!p) return;
   inspect = { x: p.x, y: p.y };
   selected = p.side === 'friend' ? p.id : null;
-  hintEl.innerHTML = describeInFight(p);
+  hintEl.innerHTML = tapHint(p);
   refreshHud();
+}
+
+/**
+ * What the hint line says when a piece is tapped. The very first time anyone
+ * ever picks up a friend, say what the glow means — the one rule (move by
+ * landing, catch by landing) the whole game hangs on. After that, the piece
+ * describes itself.
+ */
+function tapHint(p: Parameters<typeof describeInFight>[0]): string {
+  if (p.side === 'friend') {
+    const first = coach(
+      'select',
+      `The glowing squares are everywhere the ${
+        p.kind === 'keeper' ? 'Keeper' : KIND_INFO[p.kind].title
+      } can go — land on a bramble creature to catch it! ${iconHTML('daisy')}`,
+    );
+    if (first) return first;
+  }
+  return describeInFight(p);
 }
 
 /** describe(), plus what a tapped piece's quirks mean on the board. */
@@ -1163,7 +1254,16 @@ function beginEnemyTurn() {
       tweens = [];
       frozenTelegraphs = null;
       phase = 'player';
-      if (fight!.status === 'playing') hintEl.innerHTML = blockedNote ?? DEFAULT_HINT;
+      // the first enemy turn anyone ever watches earns the telegraph bubble —
+      // unless something louder (a block, a save) already needs the line
+      if (fight!.status === 'playing')
+        hintEl.innerHTML =
+          blockedNote ??
+          coach(
+            'arrows',
+            'Every arrow is a promise: that creature moves exactly there next turn. Step clear, block the path — or catch it first!',
+          ) ??
+          DEFAULT_HINT;
       refreshHud();
       if (fight!.status !== 'playing') {
         playOutcome();
@@ -1619,7 +1719,7 @@ canvas.addEventListener('pointerdown', (ev) => {
       if (at) drag = { id: p.id, from: at, at, moved: false };
       canvas.setPointerCapture(ev.pointerId);
     }
-    hintEl.innerHTML = describeInFight(p);
+    hintEl.innerHTML = tapHint(p);
   } else {
     selected = null;
     inspect = null;

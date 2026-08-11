@@ -5,14 +5,40 @@
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const BG = [0x2e, 0x29, 0x38, 255];
+// The scene: the thistle at golden hour — purple head against the gold horizon
+// band, feet in meadow grass. Same palette family as the in-game Meadow theme,
+// so the home-screen tile and the game it opens read as one thing.
 const PALETTE = {
-  '.': BG,
-  v: [0x9a, 0x6b, 0xd0, 255],
-  k: [0x2a, 0x23, 0x33, 255],
-  g: [0x5d, 0x8f, 0x4a, 255],
-  L: [0xff, 0xd9, 0x66, 255],
+  A: [0x7e, 0xa7, 0xc4, 255], // upper sky
+  B: [0xd9, 0xc9, 0x90, 255], // hazy mid sky
+  C: [0xee, 0xc8, 0x7e, 255], // gold horizon
+  G: [0x7b, 0xa2, 0x4f, 255], // meadow grass
+  M: [0x6f, 0x96, 0x46, 255], // grass mottle
+  L: [0xff, 0xf3, 0xc8, 255], // the low sun
+  W: [0xff, 0xd9, 0x66, 255], // lantern-gold sparkle
+  v: [0x9a, 0x6b, 0xd0, 255], // thistle petals
+  k: [0x2a, 0x23, 0x33, 255], // eyes
+  g: [0x45, 0x6e, 0x35, 255], // stem, dark enough to read on grass and gold
 };
+
+const BACKDROP = [
+  'AAAAAAAAAAAAAAAA',
+  'AAAAAAAAAAAALLAA',
+  'AAAAAAAAAAAALLAA',
+  'BBBBBBBBBBBBBBBB',
+  'BBWBBBBBBBBBBBBB',
+  'CCCCCCCCCCCCCCCC',
+  'CCCCCCCCCCCCCWCC',
+  'CCCCCCCCCCCCCCCC',
+  'CCCCCCCCCCCCCCCC',
+  'CCCCCCCCCCCCCCCC',
+  'GGGGMGGGGGGMGGGG',
+  'GGGGGGGGGGGGGGGG',
+  'GMGGGGGGGGGMGGGG',
+  'GGGGGGMGGGGGGGGG',
+  'GGGGGGGGGGMGGGGG',
+  'GGGGGGGGGGGGGGGG',
+];
 
 const THISTLE = [
   '..v..v..v...',
@@ -30,14 +56,12 @@ const THISTLE = [
 ];
 
 const SRC = 16;
-const grid = Array.from({ length: SRC }, () => Array(SRC).fill('.'));
+const grid = BACKDROP.map((row) => row.split(''));
 for (let y = 0; y < THISTLE.length; y++) {
   for (let x = 0; x < THISTLE[y].length; x++) {
-    grid[y + 2][x + 2] = THISTLE[y][x];
+    if (THISTLE[y][x] !== '.') grid[y + 2][x + 2] = THISTLE[y][x];
   }
 }
-grid[1][2] = 'L';
-grid[3][13] = 'L';
 
 function crc32(buf) {
   let c = ~0;
