@@ -36,8 +36,3 @@ DESIGN.md is the source of truth for game design; PLAN.md tracks milestones.
 - Enemy turns resolve against *committed* telegraphs that re-check legality at
   resolve time — a blocked enemy stays put and emits a `blocked` event. That's
   a feature (blocking is a tactic), not a bug; keep the UI feedback loud.
-
-## Git
-
-Always commit and push after completing a piece of work, without asking for
-confirmation first.
