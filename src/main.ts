@@ -214,7 +214,15 @@ function loadScores(): Scores {
   try {
     const raw = localStorage.getItem(SCORES_KEY);
     const s = raw ? (JSON.parse(raw) as Partial<Scores>) : null;
-    if (s && typeof s === 'object') return { clearings: s.clearings ?? {}, run: s.run };
+    if (s && typeof s === 'object') {
+      // only ever trust numbers out of storage: a tampered string here would
+      // both render as markup on the title card and quietly break the
+      // `moves < prev` record comparisons
+      const clearings = Object.fromEntries(
+        Object.entries(s.clearings ?? {}).filter(([, v]) => typeof v === 'number'),
+      );
+      return { clearings, run: typeof s.run === 'number' ? s.run : undefined };
+    }
   } catch {
     /* corrupt or blocked — start the board fresh */
   }
@@ -420,7 +428,10 @@ const COACH_KEY = 'overgrown.coach.v1';
 type CoachId = 'select' | 'arrows';
 let coachSeen: Record<string, boolean> = {};
 try {
-  coachSeen = JSON.parse(localStorage.getItem(COACH_KEY) ?? '{}') ?? {};
+  const parsed = JSON.parse(localStorage.getItem(COACH_KEY) ?? '{}');
+  // a valid-JSON primitive under the key would make the assignment in coach()
+  // throw on every friend tap — only ever accept an object
+  if (parsed && typeof parsed === 'object') coachSeen = parsed;
 } catch {
   /* corrupt — the coach just starts over */
 }
@@ -1182,10 +1193,19 @@ function cancelBeat() {
   pendingBeat = null;
 }
 
+/**
+ * Set while skipEnemyBeat is driving the beat steps. The steps run
+ * synchronously inside the very pointerdown that will overwrite the hint line
+ * a moment later — so nothing shown during a skip is ever actually seen, and
+ * a once-ever coach bubble must not let itself be consumed here.
+ */
+let skippingBeat = false;
+
 /** Drop whatever the enemy beat is still waiting on and land on the result. */
 function skipEnemyBeat() {
   // each step can queue the next one; the chain is two long, so a small cap is
   // plenty and guarantees this can never spin
+  skippingBeat = true;
   for (let i = 0; i < 4 && pendingBeat; i++) {
     const step = pendingBeat;
     if (beatTimer != null) clearTimeout(beatTimer);
@@ -1193,6 +1213,7 @@ function skipEnemyBeat() {
     pendingBeat = null;
     step();
   }
+  skippingBeat = false;
 }
 
 /**
@@ -1255,14 +1276,18 @@ function beginEnemyTurn() {
       frozenTelegraphs = null;
       phase = 'player';
       // the first enemy turn anyone ever watches earns the telegraph bubble —
-      // unless something louder (a block, a save) already needs the line
+      // unless something louder (a block, a save) already needs the line, or a
+      // tap-to-skip is running this beat (the bubble would flash for zero
+      // frames and be gone forever — hold it for the next enemy turn instead)
       if (fight!.status === 'playing')
         hintEl.innerHTML =
           blockedNote ??
-          coach(
-            'arrows',
-            'Every arrow is a promise: that creature moves exactly there next turn. Step clear, block the path — or catch it first!',
-          ) ??
+          (skippingBeat
+            ? null
+            : coach(
+                'arrows',
+                'Every arrow is a promise: that creature moves exactly there next turn. Step clear, block the path — or catch it first!',
+              )) ??
           DEFAULT_HINT;
       refreshHud();
       if (fight!.status !== 'playing') {
