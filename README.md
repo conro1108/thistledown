@@ -7,9 +7,9 @@ here has ever heard of chess.
 **Play it: [thistledown.vercel.app](https://thistledown.vercel.app)** — built
 for a phone, works anywhere.
 
-| | |
-|---|---|
-| ![Title](shots/title.png) | ![A fight in the Meadow](shots/fight.png) |
+| | | |
+|---|---|---|
+| ![Title](shots/title.png) | ![Deep in the run](shots/fight.png) | ![The Bramble Heart](shots/boss.png) |
 
 ## How it plays
 
