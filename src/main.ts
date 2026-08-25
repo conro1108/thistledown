@@ -1,14 +1,12 @@
 import './style.css';
 import { movesFor, pieceAt } from './game/board';
 import { enemies, NAIVE_DIALS, type PromotionKind } from './game/fight';
+import { REGION_NAMES, regionOf, scaleDials } from './game/ladder';
 import {
   activeUpgrades,
   isSpry,
   KIND_INFO,
-  REGION_NAMES,
-  regionOf,
   ROSTER_CAP,
-  scaleDials,
   TEMP_LIFESPAN,
   TRINKETS,
   upgradeClearingsLeft,

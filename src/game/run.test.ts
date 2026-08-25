@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { movesFor, pieceAt } from './board';
-import {
-  afterFightWon,
-  buildFightConfig,
-  FIGHTS_PER_REGION,
-  generateFights,
-  newRun,
-  REGION_NAMES,
-  regionOf,
-} from './run';
+import { FIGHTS_PER_REGION, generateFights, REGION_NAMES, regionOf } from './ladder';
+import { afterFightWon, buildFightConfig, newRun } from './run';
 import { apply, newSession, replay, retryFight, type Session } from './session';
 
 describe('run', () => {
