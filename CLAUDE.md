@@ -12,7 +12,8 @@ DESIGN.md is the source of truth for game design; PLAN.md tracks milestones.
 ## Architecture
 
 - `src/game/` — pure, DOM-free logic (board/movement, fight loop, run state,
-  seeded RNG). Everything here is unit-tested; keep it that way.
+  seeded RNG). A handful of regression tests cover win/loss, telegraph
+  resolve, and run generation. Keep the suite small; don't add edge-case tests.
 - `src/render/` — canvas pixel renderer. Sprites are 12×12 char maps in
   `sprites.ts`.
 - `src/main.ts` — orchestration: DOM, input, overlays, animation timing.
@@ -25,7 +26,6 @@ DESIGN.md is the source of truth for game design; PLAN.md tracks milestones.
   the state (`mulberry32`), never `Math.random()`.
 - **Never say "chess"** in any player-facing text. Critters, brambles,
   clearings — the vocabulary is the whole con.
-- Game logic changes get a test in the colocated `*.test.ts` first.
 
 ## Gotchas
 

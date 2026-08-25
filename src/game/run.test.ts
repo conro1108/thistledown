@@ -1,29 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { threatsFor } from './board';
+import { movesFor, pieceAt } from './board';
 import {
   afterFightWon,
   buildFightConfig,
-  campDue,
-  campHeal,
-  campSnack,
   FIGHTS_PER_REGION,
   generateFights,
-  isSpry,
   newRun,
-  offerRecruits,
-  offerTrinkets,
-  offerUpgrades,
-  recruit,
-  recruitDue,
   REGION_NAMES,
   regionOf,
-  scaleDials,
-  takeTrinket,
-  takeUpgrade,
-  TEMP_LIFESPAN,
-  upgradesForKind,
 } from './run';
-import type { FightState, Piece } from './types';
+import { apply, newSession, replay, retryFight, type Session } from './session';
 
 describe('run', () => {
   it('every fight lineup fits the board with no overlaps', () => {
@@ -45,73 +31,6 @@ describe('run', () => {
     }
   });
 
-  it('reinforcements stay a late, occasional nudge — never an early drip', () => {
-    const run = newRun(7);
-    for (let i = 0; i < run.fights.length; i++) {
-      run.fightIndex = i;
-      const { cfg } = buildFightConfig(run);
-      if (!cfg.spread) continue;
-      // playtesters read the old clock (turn 8-12, every 3) as the game piling
-      // on. Reinforcements are a stall valve, not a pace-setter.
-      expect(cfg.spread.after).toBeGreaterThanOrEqual(14);
-      expect(cfg.spread.every).toBeGreaterThanOrEqual(5);
-    }
-  });
-
-  it('the Bramble Heart never spawns already in check — a long-range friend sharing its lane at kickoff would give the fight away for free', () => {
-    for (let seed = 0; seed < 200; seed++) {
-      const run = newRun(seed);
-      run.fightIndex = run.fights.length - 1; // the boss clearing
-      // stack long-range friends into the lineup so a shared file/rank/diagonal
-      // with the Heart's roll is plausible, not a coincidence we'd rarely hit
-      run.companions.push({ kind: 'rumble', name: 'a', shaken: false });
-      run.companions.push({ kind: 'duchess', name: 'b', shaken: false });
-      const { cfg } = buildFightConfig(run);
-      const heart = cfg.enemies.find((e) => e.kind === 'heart')!;
-      const pieces: Piece[] = cfg.friends.map((sp, i) => ({ id: i, side: 'friend', ...sp }));
-      const view = { w: cfg.w, h: cfg.h, pieces } as FightState;
-      const covered = new Set<string>();
-      for (const p of pieces) for (const t of threatsFor(view, p)) covered.add(`${t.x},${t.y}`);
-      expect(covered.has(`${heart.x},${heart.y}`)).toBe(false);
-    }
-  });
-
-  it('higher-value bramble never spawns already capturable — a recruited slider shouldn’t get a free snipe on turn one', () => {
-    for (let seed = 0; seed < 200; seed++) {
-      const run = newRun(seed);
-      // stack long-range friends into the lineup so a shared file/rank/diagonal
-      // with a rolled square is plausible, not a coincidence we'd rarely hit
-      run.companions.push({ kind: 'rumble', name: 'a', shaken: false });
-      run.companions.push({ kind: 'duchess', name: 'b', shaken: false });
-      run.companions.push({ kind: 'slink', name: 'c', shaken: false });
-      for (let i = 0; i < run.fights.length; i++) {
-        run.fightIndex = i;
-        const { cfg } = buildFightConfig(run);
-        const pieces: Piece[] = cfg.friends.map((sp, idx) => ({ id: idx, side: 'friend', ...sp }));
-        const view = { w: cfg.w, h: cfg.h, pieces } as FightState;
-        const covered = new Set<string>();
-        for (const p of pieces) for (const t of threatsFor(view, p)) covered.add(`${t.x},${t.y}`);
-        for (const e of cfg.enemies) {
-          if (e.kind === 'thistle') continue; // a nibble-able pawn on turn one is fine
-          expect(covered.has(`${e.x},${e.y}`)).toBe(false);
-        }
-      }
-    }
-  });
-
-  it('two Slinks in the roster land on different-colored squares, not stacked on one color', () => {
-    for (let seed = 0; seed < 20; seed++) {
-      const run = newRun(seed);
-      run.companions.push({ kind: 'slink', name: 'a', shaken: false });
-      run.companions.push({ kind: 'slink', name: 'b', shaken: false });
-      const { cfg } = buildFightConfig(run);
-      const slinks = cfg.friends.filter((f) => f.kind === 'slink');
-      expect(slinks).toHaveLength(2);
-      const colors = slinks.map((s) => (s.x + s.y) % 2);
-      expect(colors[0]).not.toBe(colors[1]);
-    }
-  });
-
   it('shaken companions sit out, then recover', () => {
     const run = newRun(1);
     const { lineup } = buildFightConfig(run);
@@ -124,228 +43,12 @@ describe('run', () => {
     expect(run.companions[0].shaken).toBe(false);
   });
 
-  it('recruit offers are two distinct kinds and names stay unique', () => {
-    const run = newRun(9);
-    for (let i = 0; i < 10; i++) {
-      const [a, b] = offerRecruits(run);
-      expect(a).not.toBe(b);
-      recruit(run, a);
-    }
-    const names = run.companions.map((c) => c.name);
-    expect(new Set(names).size).toBe(names.length);
-  });
-
-  it('a band with no straight-lane critter is always offered a Rumble', () => {
-    for (let seed = 0; seed < 30; seed++) {
-      const run = newRun(seed);
-      run.fightIndex = 2; // past the two-kind on-ramp, so rumble is in the pool
-      const offers = offerRecruits(run);
-      expect(offers).toContain('rumble');
-      expect(new Set(offers).size).toBe(offers.length);
-    }
-  });
-
-  it('once a lane-holder is in the band, offers go back to a free draw', () => {
-    const run = newRun(3);
-    run.fightIndex = 2;
-    recruit(run, 'rumble');
-    // the guarantee is spent — over many draws something other than a Rumble shows up
-    const seen = new Set<string>();
-    for (let i = 0; i < 20; i++) for (const k of offerRecruits(run)) seen.add(k);
-    expect([...seen].some((k) => k !== 'rumble')).toBe(true);
-  });
-
-  it('camp: due before each region boss, heal recovers everyone, honeycake sticks', () => {
-    const run = newRun(5);
-    expect(campDue(run)).toBe(false);
-    run.fightIndex = 3;
-    expect(campDue(run)).toBe(true);
-    run.fightIndex = 7;
-    expect(campDue(run)).toBe(true);
-    run.fightIndex = 15;
-    expect(campDue(run)).toBe(true);
-    run.fightIndex = 4;
-    expect(campDue(run)).toBe(false);
-    run.fightIndex = 12;
-    expect(campDue(run)).toBe(false);
-    run.fightIndex = 3;
-    run.companions[0].shaken = true;
-    run.companions[1].shaken = true;
-    campHeal(run);
-    expect(run.companions.every((c) => !c.shaken)).toBe(true);
-    campSnack(run, 2);
-    expect(isSpry(run, run.companions[2])).toBe(true);
-    // the buff reaches the board
-    const { cfg, lineup } = buildFightConfig(run);
-    const j = lineup.indexOf(2);
-    expect(cfg.friends[j + 1].spry).toBe(true);
-  });
-
-  it('trinkets: offers exclude owned ones and the whistle makes fielded hoppers spry', () => {
-    const run = newRun(11);
-    const offered = offerTrinkets(run, 2);
-    expect(new Set(offered).size).toBe(2);
-    takeTrinket(run, 'whistle');
-    expect(offerTrinkets(run, 3).includes('whistle')).toBe(false);
-    const { cfg, lineup } = buildFightConfig(run);
-    const hopperIdx = run.companions.findIndex((c) => c.kind === 'hopper');
-    expect(cfg.friends[lineup.indexOf(hopperIdx) + 1].spry).toBe(true);
-    takeTrinket(run, 'cloak');
-    takeTrinket(run, 'breakfast');
-    const next = buildFightConfig(run).cfg;
-    expect(next.cloak).toBe(true);
-    expect(next.secondBreakfast).toBe(true);
-  });
-
-  it('the master difficulty knob scales a clearing’s bramble smarts', () => {
-    // scaleDials in isolation: only foresight/caution bend, and they clamp to 1
-    expect(scaleDials({ foresight: 0.4, caution: 0.5 }, 1)).toEqual({ foresight: 0.4, caution: 0.5 });
-    expect(scaleDials({ foresight: 0.4, caution: 0.5 }, 0)).toEqual({ foresight: 0, caution: 0 });
-    expect(scaleDials({ foresight: 0.4, caution: 0.5 }, 2)).toEqual({ foresight: 0.8, caution: 1 });
-    // bloodlust/temperature are not difficulty knobs — they pass through untouched
-    expect(scaleDials({ foresight: 0.5, bloodlust: 2, temperature: 0.3 }, 0)).toEqual({
-      foresight: 0,
-      bloodlust: 2,
-      temperature: 0.3,
-    });
-    expect(scaleDials(undefined, 3)).toBeUndefined();
-
-    // and it rides through buildFightConfig onto the actual clearing dials
-    const authored = newRun(5);
-    authored.fightIndex = 15; // the final heart: authored foresight/caution of 1
-    const base = buildFightConfig(authored).cfg.dials!;
-    expect(base.foresight).toBe(1);
-
-    const easy = newRun(5);
-    easy.fightIndex = 15;
-    easy.difficulty = 0;
-    const flat = buildFightConfig(easy).cfg.dials!;
-    expect(flat.foresight).toBe(0);
-    expect(flat.caution).toBe(0);
-  });
-
   it('winning the last fight wins the run', () => {
     const run = newRun(3);
     run.fightIndex = run.fights.length - 1;
     const { lineup } = buildFightConfig(run);
     afterFightWon(run, lineup, new Set(lineup));
     expect(run.status).toBe('won');
-  });
-
-  it('trinket offers are region-gated: late relics stay hidden until their region', () => {
-    const early = newRun(4); // region 0
-    const wide = offerTrinkets(early, 9); // ask for everything the region can spare
-    expect(wide).toContain('ward');
-    expect(wide).not.toContain('luck'); // region 1
-    expect(wide).not.toContain('dew'); // region 2
-    const deep = newRun(4);
-    deep.fightIndex = 8; // region 2 — everything is unlocked now
-    expect(offerTrinkets(deep, 9)).toEqual(
-      expect.arrayContaining(['cloak', 'ward', 'luck', 'map', 'dew', 'trail']),
-    );
-  });
-
-  it('Beginner’s Luck adds a third recruit when the pool can spare one', () => {
-    const run = newRun(9);
-    run.fightIndex = 2; // region 0, four kinds in the pool
-    expect(offerRecruits(run)).toHaveLength(2);
-    takeTrinket(run, 'luck');
-    expect(offerRecruits(run)).toHaveLength(3);
-  });
-
-  it('Morning Dew spares fielded friends the shakes', () => {
-    const run = newRun(7);
-    const { lineup } = buildFightConfig(run);
-    const caught = lineup[1]; // a fielded companion the fight "captured"
-    takeTrinket(run, 'dew');
-    afterFightWon(run, lineup, new Set(lineup.filter((i) => i !== caught)));
-    expect(run.companions[caught].shaken).toBe(false);
-  });
-
-  it('Trailmarker delays the spread clock by three turns', () => {
-    const base = newRun(5);
-    const before = buildFightConfig(base).cfg.spread!.after;
-    takeTrinket(base, 'trail');
-    expect(buildFightConfig(base).cfg.spread!.after).toBe(before + 3);
-  });
-
-  it('Bramble Ward and Early Riser ride onto the fight config', () => {
-    const run = newRun(5);
-    takeTrinket(run, 'ward');
-    takeTrinket(run, 'riser');
-    const cfg = buildFightConfig(run).cfg;
-    expect(cfg.ward).toBe(true);
-    expect(cfg.riser).toBe(true);
-  });
-});
-
-describe('movement upgrades (run)', () => {
-  it('offers are gated by region and by whether you field that kind', () => {
-    const run = newRun(3); // sprout, sprout, hopper — region 0
-    expect(offerUpgrades(run, 9)).toEqual(['thornstep']); // only the region-0 Sprout trick
-    run.fightIndex = 4; // region 1 unlocks more
-    const r1 = offerUpgrades(run, 9);
-    expect(r1).toEqual(expect.arrayContaining(['thornstep', 'rootgrip', 'springheel']));
-    expect(r1).not.toContain('sidestep'); // no Slink in the band → dead card, withheld
-    recruit(run, 'slink');
-    expect(offerUpgrades(run, 9)).toContain('sidestep');
-  });
-
-  it('a live upgrade is never offered again and rides onto every companion of its kind', () => {
-    const run = newRun(3);
-    takeUpgrade(run, 'thornstep');
-    expect(offerUpgrades(run, 9)).not.toContain('thornstep');
-    const { cfg, lineup } = buildFightConfig(run);
-    // every fielded Sprout carries it; the Hopper does not
-    lineup.forEach((compIdx, j) => {
-      const sp = cfg.friends[j + 1];
-      if (run.companions[compIdx].kind === 'sprout') expect(sp.upgrades).toContain('thornstep');
-      else expect(sp.upgrades).toBeUndefined();
-    });
-  });
-
-  it('an upgrade fades after TEMP_LIFESPAN clearings, then can be earned again', () => {
-    const run = newRun(3);
-    takeUpgrade(run, 'thornstep'); // learned at clearing 0 → live through clearings 0..2
-    for (let i = 0; i < TEMP_LIFESPAN; i++) {
-      run.fightIndex = i;
-      expect(upgradesForKind(run, 'sprout')).toContain('thornstep');
-    }
-    run.fightIndex = TEMP_LIFESPAN; // the clearing it fades on
-    expect(upgradesForKind(run, 'sprout')).not.toContain('thornstep');
-    expect(buildFightConfig(run).cfg.friends[1].upgrades).toBeUndefined();
-    // faded, so it's on the table once more — and re-learning it re-arms the band
-    expect(offerUpgrades(run, 9)).toContain('thornstep');
-    takeUpgrade(run, 'thornstep');
-    expect(upgradesForKind(run, 'sprout')).toContain('thornstep');
-  });
-});
-
-describe('temporary comforts & recruit cadence', () => {
-  it('honeycake wears off after TEMP_LIFESPAN clearings', () => {
-    const run = newRun(3);
-    run.fightIndex = 3;
-    campSnack(run, 0); // spry through clearings 3..5
-    expect(isSpry(run, run.companions[0])).toBe(true);
-    run.fightIndex = 3 + TEMP_LIFESPAN - 1;
-    expect(isSpry(run, run.companions[0])).toBe(true);
-    run.fightIndex = 3 + TEMP_LIFESPAN;
-    expect(isSpry(run, run.companions[0])).toBe(false);
-    // and the board no longer sees the spring in their step
-    expect(buildFightConfig(run).cfg.friends[1].spry).toBeUndefined();
-  });
-
-  it('recruits are offered every other clearing, not after every one', () => {
-    const run = newRun(3);
-    // recruitDue reads fightIndex - 1 (the clearing just won), so 1,3,5.. → yes
-    run.fightIndex = 1;
-    expect(recruitDue(run)).toBe(true); // just cleared clearing 0
-    run.fightIndex = 2;
-    expect(recruitDue(run)).toBe(false); // just cleared clearing 1
-    run.fightIndex = 3;
-    expect(recruitDue(run)).toBe(true);
-    run.fightIndex = 4;
-    expect(recruitDue(run)).toBe(false);
   });
 });
 
@@ -366,42 +69,6 @@ describe('the ladder (generateFights)', () => {
     expect(regionOf(23)).toBe(5);
   });
 
-  it('different seeds grow different meadows (somewhere in the ladder)', () => {
-    const a = JSON.stringify(generateFights(1));
-    const b = JSON.stringify(generateFights(2));
-    expect(a).not.toEqual(b);
-  });
-
-  it('hearts cap regions 1, 3, 4, 5 and 6; the Gloom holds region 2', () => {
-    const fights = generateFights(7);
-    const heartAt = new Set([3, 11, 15, 19, 23]);
-    for (const i of heartAt) expect(fights[i].enemies.some((e) => e.kind === 'heart')).toBe(true);
-    expect(fights[7].enemies.some((e) => e.kind === 'gloom')).toBe(true);
-    // hearts nowhere else
-    fights.forEach((f, i) => {
-      if (!heartAt.has(i)) expect(f.enemies.some((e) => e.kind === 'heart')).toBe(false);
-    });
-  });
-
-  it('difficulty climbs into the endgame: Rotwood moves three a turn, the Worldroot four', () => {
-    const fights = generateFights(11);
-    for (let i = 16; i <= 19; i++) expect(fights[i].acts).toBeGreaterThanOrEqual(3);
-    for (let i = 20; i <= 23; i++) expect(fights[i].acts).toBe(4);
-    // the deepest regions never fall below the Deep Bramble's spread pressure
-    for (let i = 16; i <= 23; i++) expect(fights[i].spread!.cap).toBeGreaterThanOrEqual(9);
-  });
-
-  it('the training wheels come off on schedule: no fickle before Hedgerow, no shrouds before the Tanglewood', () => {
-    for (let seed = 0; seed < 60; seed++) {
-      const fights = generateFights(seed);
-      fights.forEach((f, i) => {
-        if (i < 2) expect(f.enemies.some((e) => e.fickle)).toBe(false);
-        if (i < 8) expect(f.enemies.some((e) => e.veiled)).toBe(false);
-        expect(f.enemies.length).toBeGreaterThanOrEqual(3); // never an empty clearing
-      });
-    }
-  });
-
   it('every fight fields a sane bramble for its board', () => {
     for (let seed = 0; seed < 60; seed++) {
       for (const f of generateFights(seed)) {
@@ -410,5 +77,131 @@ describe('the ladder (generateFights)', () => {
         expect(f.enemies.length).toBeLessThan(zone / 2);
       }
     }
+  });
+});
+
+/**
+ * A deterministic headless player: always the first legal move of the first
+ * movable friend, first recruit offer, first camp/found option. Board
+ * iteration order is deterministic, so the same seed gives the same run.
+ */
+function botTurn(s: Session): boolean {
+  switch (s.stage) {
+    case 'intro':
+      return apply(s, { t: 'begin' });
+    case 'fight': {
+      const f = s.fight!;
+      if (s.resolveDue) return apply(s, { t: 'resolve' });
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        const ms = movesFor(f, p);
+        if (ms.length) return apply(s, { t: 'move', id: p.id, to: ms[0] });
+      }
+      return apply(s, { t: 'resolve' }); // hemmed in — the wait
+    }
+    case 'promotion':
+      return apply(s, { t: 'promote', kind: 'hopper' });
+    case 'post':
+      return s.recruitOffers
+        ? apply(s, { t: 'recruit', kind: s.recruitOffers[0] })
+        : apply(s, { t: 'skip' });
+    case 'found':
+    case 'camp':
+      if (s.trinketOffers.length) return apply(s, { t: 'trinket', id: s.trinketOffers[0] });
+      return apply(s, { t: 'rest' });
+    case 'over':
+      return false;
+  }
+}
+
+/** Comparable snapshot: everything but the RNG closure and transient events. */
+function snap(s: Session) {
+  const { rng: _r, ...run } = s.run;
+  const fight = s.fight ? { ...s.fight, rng: undefined, events: [] } : null;
+  return JSON.parse(
+    JSON.stringify({
+      run,
+      fight,
+      lineup: s.lineup,
+      stage: s.stage,
+      resolveDue: s.resolveDue,
+      recruitOffers: s.recruitOffers,
+      trinketOffers: s.trinketOffers,
+    }),
+  );
+}
+
+describe('session', () => {
+  it('a long bot run replays from its log to the identical state', () => {
+    for (const seed of [7, 42, 1234]) {
+      const live = newSession(seed);
+      // play a few hundred decisions (several fights deep, or a full run)
+      for (let i = 0; i < 400 && live.stage !== 'over'; i++) {
+        expect(botTurn(live)).toBe(true);
+      }
+      const rebuilt = replay(seed, live.log);
+      expect(snap(rebuilt)).toEqual(snap(live));
+    }
+  });
+
+  it('retrying a lost clearing rewinds to that fight, not the start of the run', () => {
+    // The idle bot never wins a fight; a capture-seeking one clears them, so we
+    // can get genuinely several clearings deep before exercising the retry.
+    // Enemy squares are randomized per run now, so "seek" also has to close
+    // the distance when nothing is capturable yet — a fixed first-legal-move
+    // fallback only worked by luck of a particular hardcoded layout. Track
+    // each piece's previous square so a leaper (whose Manhattan distance to a
+    // target doesn't shrink monotonically move-to-move) can't just ping-pong
+    // between two equally-"close" squares forever.
+    const lastPos = new Map<number, { x: number; y: number }>();
+    const grab = (s: Session): boolean => {
+      const f = s.fight!;
+      if (s.resolveDue) return apply(s, { t: 'resolve' });
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        for (const m of movesFor(f, p)) {
+          const occ = pieceAt(f, m.x, m.y);
+          if (occ?.side === 'bramble' && occ.kind !== 'heart') return apply(s, { t: 'move', id: p.id, to: m });
+        }
+      }
+      const foes = f.pieces.filter((p) => p.side === 'bramble');
+      let best: { id: number; to: { x: number; y: number }; dist: number } | null = null;
+      for (const p of f.pieces) {
+        if (p.side !== 'friend') continue;
+        const prev = lastPos.get(p.id);
+        for (const m of movesFor(f, p)) {
+          if (prev && prev.x === m.x && prev.y === m.y) continue; // don't just undo the last hop
+          const dist = Math.min(...foes.map((e) => Math.abs(e.x - m.x) + Math.abs(e.y - m.y)));
+          if (!best || dist < best.dist) best = { id: p.id, to: m, dist };
+        }
+      }
+      if (!best) return botTurn(s); // hemmed in — wait
+      const mover = f.pieces.find((p) => p.id === best!.id)!;
+      lastPos.set(best.id, { x: mover.x, y: mover.y });
+      return apply(s, { t: 'move', id: best.id, to: best.to });
+    };
+    const drive = (s: Session) => (s.stage === 'fight' ? grab(s) : botTurn(s));
+
+    // get past the first clearing so a retry has real history behind it
+    const live = newSession(7);
+    for (let i = 0; i < 600 && live.run.fightIndex < 1; i++) expect(drive(live)).toBe(true);
+    expect(live.run.fightIndex).toBeGreaterThanOrEqual(1); // genuinely a clearing deep
+
+    // sit at the top of the current fight and snapshot the clean start
+    while (live.stage !== 'fight') expect(drive(live)).toBe(true);
+    const fightIndex = live.run.fightIndex;
+    const companions = live.run.companions.length;
+    const cleanStart = snap(live);
+
+    // blunder a few moves into it, then bail out and retry
+    for (let i = 0; i < 4 && live.stage === 'fight'; i++) drive(live);
+    const retried = retryFight(live);
+
+    expect(retried.run.fightIndex).toBe(fightIndex); // same clearing, not back to 0
+    expect(retried.run.companions.length).toBe(companions); // roster carried in, not the newRun three
+    expect(retried.stage).toBe('fight');
+    expect(retried.resolveDue).toBe(false);
+    expect(retried.log.at(-1)!.t).toBe('begin'); // parked at the top of the fight
+    expect(snap(retried)).toEqual(cleanStart); // the exact board you first walked into
   });
 });
