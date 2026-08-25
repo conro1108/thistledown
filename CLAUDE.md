@@ -11,12 +11,36 @@ DESIGN.md is the source of truth for game design; PLAN.md tracks milestones.
 
 ## Architecture
 
-- `src/game/` — pure, DOM-free logic (board/movement, fight loop, run state,
-  seeded RNG). A handful of regression tests cover win/loss, telegraph
-  resolve, and run generation. Keep the suite small; don't add edge-case tests.
-- `src/render/` — canvas pixel renderer. Sprites are 12×12 char maps in
-  `sprites.ts`.
-- `src/main.ts` — orchestration: DOM, input, overlays, animation timing.
+Go straight to the file; don't grep `src/` for a concept.
+
+| Want to change… | File |
+|---|---|
+| Board geometry, piece movement, threats | `src/game/board.ts` |
+| Fight loop, enemy AI, telegraphs, spread clock, Heart cornering | `src/game/fight.ts` |
+| Which clearings exist, their enemies/dials/intro text | `src/game/ladder.ts` |
+| Run state, recruits, trinkets, upgrades, camp, spawn placement, critter blurbs | `src/game/run.ts` |
+| Decision log, stages, replay, save format | `src/game/session.ts` |
+| Shared types (`FightState`, `Piece`, `Kind`, events) | `src/game/types.ts` |
+| Board drawing, fx, telegraph arrows | `src/render/scene.ts`; sprites in `sprites.ts`, UI icons in `icons.ts` |
+| Region palettes / meadow backdrop | `src/render/themes.ts`, `backdrop.ts` |
+| Sound | `src/audio.ts` |
+| Screens & cards (title, intro, aftermath, camp, promotion) | `src/ui/screens.ts` (`stageUi` dispatches on `sess.stage`) |
+| Card/overlay builders, theming, petals | `src/ui/overlay.ts` |
+| Status line, trinket badges, roster chips, critter text | `src/ui/hud.ts` |
+| Player move → enemy beat → hints/fx from events | `src/ui/turn.ts` |
+| Tap/drag input, sound button | `src/ui/input.ts` |
+| Canvas sizing, rAF loop | `src/ui/render.ts` |
+| Save/scores/coach in localStorage | `src/ui/storage.ts` |
+| Look-back (replay history) | `src/ui/history.ts` |
+| Dev panel | `src/ui/dev.ts` |
+| Shared mutable UI state (`S.sess`, `S.fight`, `S.phase`…), timing constants | `src/ui/state.ts` |
+| DOM shell & element refs | `src/ui/dom.ts` |
+| Layout/CSS | `src/style.css` |
+
+`src/game/` is pure and DOM-free; `src/ui/` modules import each other freely
+(function-level cycles are fine — nothing runs at import time except `dom.ts`
+building the shell). `src/main.ts` just boots. Tests are a few colocated
+regressions in `src/game/*.test.ts`; keep the suite small.
 
 ## Hard rules
 

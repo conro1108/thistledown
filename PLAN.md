@@ -8,7 +8,7 @@ ahead of what's built.
 
 - Vite + vanilla TypeScript, canvas renderer, Vitest colocated tests.
 - `src/game/` is pure and DOM-free (all logic tested there); `src/render/` draws;
-  `src/main.ts` wires. Deploy: static `dist/` via `npm run build`, Vercel Vite preset.
+  `src/ui/` wires. Deploy: static `dist/` via `npm run build`, Vercel Vite preset.
 
 ## Done
 

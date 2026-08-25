@@ -15,7 +15,7 @@ don't run it for every small tweak during active playtesting.
 
 1. `npx vite --port 5173` (background). App at http://localhost:5173/.
 2. Drive with `playwright-core` (already a devDependency — no browser
-   download needed). Resolve it with `createRequire('/Users/connorrowe/projects/chess_rogue/package.json')`
+   download needed). Resolve it with `createRequire('/Users/connorrowe/projects/thistledown/package.json')`
    so the import works from a scratchpad script; a local chromium build isn't
    installed, so launch the headless shell directly:
    ```js
@@ -36,13 +36,13 @@ don't run it for every small tweak during active playtesting.
 - After a move, wait out the full beat before asserting: `PAUSE_MS` (bramble
   thinks) + tween time, currently ~340ms + ~190ms, plus your own move's
   ~120ms tween. ~1s total is safe.
-- The canvas is integer-scaled (`sizeCanvas` in `main.ts`); if you're
+- The canvas is integer-scaled (`sizeCanvas` in `src/ui/render.ts`); if you're
   checking the "board zoom" class of bug, screenshot across several turns and
   diff the canvas's `boundingBox()` size — it must stay constant.
 - All game randomness goes through the seeded RNG on `FightState`/`RunState`,
   but a browser session still uses `Date.now()` as the run seed (see
-  `startRun()` in `main.ts`), so exact piece layouts vary run to run — assert
-  against fight 1's fixed enemy spawns (`FIGHTS[0]` in `src/game/run.ts`), not
+  `startRun()` in `src/ui/screens.ts`), so exact piece layouts vary run to run — assert
+  against fight 1's fixed enemy spawns (`TEMPLATES[0]` in `src/game/ladder.ts`), not
   hardcoded coordinates from a specific past run.
 
 ## Keep it cheap even here

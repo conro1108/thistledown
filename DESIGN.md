@@ -218,7 +218,7 @@ framework tax:
   - `src/render/` — canvas pixel renderer. Port the `drawSpriteQuantized` discipline
     and the integer-scaling hard rule from Cozy Sprites day one.
   - `src/ui/` — screens, input, audio.
-  - `src/main.ts` — orchestration.
+  - `src/ui/` — screens, hud, input, turn flow; `src/main.ts` boots.
 - **Tests from the scaffold** (per house rules): Vitest, colocated `*.test.ts`.
   Movement/threat generation, enemy AI resolution, win-condition checks, and trinket
   interactions are all pure functions — exactly the "logic worth protecting." Property

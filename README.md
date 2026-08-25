@@ -45,4 +45,4 @@ npm run build    # typecheck + production build
 ```
 
 `src/game/` is pure and DOM-free (that's where the tests live); `src/render/`
-draws; `src/main.ts` wires. Deploys as a static site (Vercel, Vite preset).
+draws; `src/ui/` wires. Deploys as a static site (Vercel, Vite preset).
