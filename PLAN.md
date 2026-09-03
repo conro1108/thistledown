@@ -39,13 +39,19 @@ Camps before bosses; region-shaped recruit pools; roster cap 6.
   thistle sprouts; standing on the mark smothers it. Killed the promotion-farm.
 - Board size.
 
-**Progression items** — Camps (Warm mash heals shaken / Honeycake makes one companion
-spry). Trinkets, region-gated so new relics keep surfacing (Dandelion Cloak, Acorn
-Whistle, Second Breakfast, Bramble Ward, Early Riser, Beginner's Luck, Wanderer's Map,
-Morning Dew, Trailmarker); free pick after clearing 1, more at camps. **Movement
-upgrades** — run-level, keyed by kind, offered at campfires: Thornstep/Rootgrip (Sprout),
-Springheel (Hopper), Sidestep/Underbrush (Slink), Pivot (Rumble). Each is a variant of
-the real piece, gated behind region + owning that kind.
+**Progression items** — every one happens *on the board*, and no two share a
+mechanic (the first set was six flavours of "also a one-step move" plus four
+invisible passives; it got reworked). Camps: Warm mash heals shaken; Honeycake
+blossoms a Sprout on the spot. **Trinkets**, region-gated: Dandelion Cloak (a caught
+friend drifts home), Bramble Ward (the Keeper shrugs one catch off), Second Breakfast
+(a mid-lunge catch earns a second step), Forked Twig (threaten two at once — both
+freeze), Acorn Whistle (Keeper swaps with a neighbour — castling's shape), Thorn Pin
+(a creature in a slider's lane with something dearer behind can't move — the real
+pin), Glowworm Jar (shrouded creatures show arrows), Morning Dew (never shaken). Free
+pick after clearing 1, one at each camp. **Movement upgrades** — temporary, keyed by
+kind: Long Stride (Sprout doubles from its home row — the real rule), Rootgrip, Long
+Legs (Hopper's stretched L), Sidestep/Underbrush (Slink), Cornering (Rumble turns one
+corner mid-charge). Gated behind region + owning that kind.
 
 **Shared choice-scene UI** — recruits/camp/trinkets/honeycake/promotion all use one
 card-picker: tap to study (sprite, blurb, 5×5 movement preview), explicit confirm.

@@ -23,6 +23,33 @@ const LEAP: Vec[] = [
   { x: -1, y: -2 },
   { x: -2, y: -1 },
 ];
+/** Long Legs: the stretched L (three and one). */
+const LONG_LEAP: Vec[] = [
+  { x: 1, y: 3 },
+  { x: 3, y: 1 },
+  { x: -1, y: 3 },
+  { x: -3, y: 1 },
+  { x: 1, y: -3 },
+  { x: 3, y: -1 },
+  { x: -1, y: -3 },
+  { x: -3, y: -1 },
+];
+
+/** Chess piece values in disguise — the exchange math the dials (and the pin) reason with. */
+export const PIECE_VALUE: Record<Kind, number> = {
+  keeper: 1000,
+  sprout: 10,
+  hopper: 30,
+  slink: 30,
+  rumble: 50,
+  duchess: 90,
+  thistle: 10,
+  tumbleweed: 30,
+  creeper: 30,
+  golem: 50,
+  gloom: 90,
+  heart: 0, // can't be captured; it plays by the king rule instead
+};
 
 interface Mover {
   steps?: Vec[];
@@ -47,20 +74,6 @@ const MOVERS: Record<Kind, Mover> = {
 
 function hasUpgrade(p: Piece, u: UpgradeId): boolean {
   return p.upgrades?.includes(u) ?? false;
-}
-
-/**
- * Extra *step* directions a piece's upgrades graft on — full moves that can
- * capture and that genuinely threaten (unlike a pawn's quiet advance). Each is
- * gated to the kind it belongs to so an upgrade only bends its own critter.
- */
-function upgradeSteps(p: Piece): Vec[] {
-  if (!p.upgrades) return [];
-  const out: Vec[] = [];
-  if (p.kind === 'hopper' && hasUpgrade(p, 'springheel')) out.push(...DIAG);
-  if (p.kind === 'slink' && hasUpgrade(p, 'sidestep')) out.push(...ORTHO);
-  if (p.kind === 'rumble' && hasUpgrade(p, 'pivot')) out.push(...DIAG);
-  return out;
 }
 
 /**
@@ -94,9 +107,21 @@ function forward(p: Piece): number {
   return p.side === 'friend' ? -1 : 1;
 }
 
-/** Legal destinations: empty squares, or squares holding the other side. */
+/**
+ * Legal destinations: empty squares, or squares holding the other side — and,
+ * with the Acorn Whistle, a friend beside the Keeper (they trade places).
+ * A bramble creature that's frozen by a fork or held by a pin has no moves at
+ * all: it can't plan, can't flee, can't shield the Heart.
+ */
 export function movesFor(s: FightState, p: Piece): Vec[] {
+  if (p.side === 'bramble' && (p.stunned || isPinned(s, p))) return [];
   const out = squaresFor(s, p, false);
+  if (p.kind === 'keeper' && p.side === 'friend' && s.swapLeft > 0 && !s.freeMoveActive) {
+    for (const d of ALL8) {
+      const occ = pieceAt(s, p.x + d.x, p.y + d.y);
+      if (occ && occ.side === 'friend') out.push({ x: occ.x, y: occ.y });
+    }
+  }
   // Second Breakfast's extra move is a stretch, not a snatch — no captures
   if (s.freeMoveActive && p.side === 'friend') return out.filter((v) => !pieceAt(s, v.x, v.y));
   return out;
@@ -110,16 +135,59 @@ export function threatsFor(s: FightState, p: Piece): Vec[] {
   return squaresFor(s, p, true);
 }
 
+/**
+ * The Thorn Pin, the real thing by another name: a bramble creature is held
+ * fast when it's the first piece on a friend slider's ray and the next piece
+ * behind it on that same ray is bramble worth more than it (the Heart counts
+ * as beyond price). Moving would expose the dearer one, so it doesn't.
+ */
+export function isPinned(s: FightState, e: Piece): boolean {
+  if (!s.pin || e.side !== 'bramble' || e.kind === 'heart') return false;
+  for (const f of s.pieces) {
+    if (f.side !== 'friend') continue;
+    const dirs = MOVERS[f.kind].slides;
+    if (!dirs) continue;
+    for (const d of dirs) {
+      const first = firstAlong(s, f, d);
+      if (!first || first.id !== e.id) continue;
+      const behind = firstAlong(s, e, d);
+      if (behind && behind.side === 'bramble' && (behind.kind === 'heart' || PIECE_VALUE[behind.kind] > PIECE_VALUE[e.kind]))
+        return true;
+    }
+  }
+  return false;
+}
+
+/** The first piece on the ray from p in direction d, if any. */
+function firstAlong(s: FightState, p: Piece, d: Vec): Piece | undefined {
+  let x = p.x + d.x;
+  let y = p.y + d.y;
+  while (inBounds(s, x, y)) {
+    const occ = pieceAt(s, x, y);
+    if (occ) return occ;
+    x += d.x;
+    y += d.y;
+  }
+  return undefined;
+}
+
 function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
   const m = MOVERS[p.kind];
-  const out: Vec[] = spryOut(s, p, threats);
+  const out: Vec[] = [];
 
   if (m.pawn) {
     const dy = forward(p);
     if (!threats) {
       const fx = p.x;
       const fy = p.y + dy;
-      if (inBounds(s, fx, fy) && !pieceAt(s, fx, fy)) out.push({ x: fx, y: fy });
+      if (inBounds(s, fx, fy) && !pieceAt(s, fx, fy)) {
+        out.push({ x: fx, y: fy });
+        // Long Stride: from its home row a Sprout may take two steps at once
+        // (the real rule, taught by bending nothing). Never a capture.
+        const home = p.side === 'friend' ? s.h - 2 : 1;
+        if (hasUpgrade(p, 'longstride') && p.y === home && inBounds(s, fx, fy + dy) && !pieceAt(s, fx, fy + dy))
+          out.push({ x: fx, y: fy + dy });
+      }
     }
     for (const dx of [-1, 1]) {
       const x = p.x + dx;
@@ -130,9 +198,6 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
       } else {
         const occ = pieceAt(s, x, y);
         if (occ && canLand(p, occ)) out.push({ x, y });
-        // Thornstep: advance diagonally forward onto empty ground too. A quiet
-        // step, not a new bite — the diagonal is already threatened above.
-        else if (!occ && hasUpgrade(p, 'thornstep')) out.push({ x, y });
       }
     }
     // Rootgrip: one plain step straight back, never a capture (a shy retreat).
@@ -144,20 +209,26 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
     return dedup(out);
   }
 
+  const step = (d: Vec) => {
+    const x = p.x + d.x;
+    const y = p.y + d.y;
+    if (!inBounds(s, x, y)) return;
+    const occ = pieceAt(s, x, y);
+    if (threats || !occ || canLand(p, occ)) out.push({ x, y });
+  };
   if (m.steps) {
-    for (const d of m.steps) {
-      const x = p.x + d.x;
-      const y = p.y + d.y;
-      if (!inBounds(s, x, y)) continue;
-      const occ = pieceAt(s, x, y);
-      if (threats || !occ || canLand(p, occ)) out.push({ x, y });
-    }
+    for (const d of m.steps) step(d);
+    // Long Legs: the Hopper's leap, stretched — a second, wider L
+    if (p.kind === 'hopper' && hasUpgrade(p, 'longlegs')) for (const d of LONG_LEAP) step(d);
   }
 
   if (m.slides) {
     // Underbrush: a Slink's diagonal glide slips over the first friendly plant
     // in the lane and keeps going. Only the one — a second body still stops it.
     const canHop = p.kind === 'slink' && hasUpgrade(p, 'underbrush');
+    // Cornering: a Rumble may turn one corner mid-charge — every empty square
+    // it passes is a place it could swing ninety degrees and keep barrelling.
+    const corners = p.kind === 'rumble' && hasUpgrade(p, 'cornering');
     for (const d of m.slides) {
       let hopped = false;
       let x = p.x + d.x;
@@ -176,40 +247,39 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
           break;
         }
         out.push({ x, y });
+        if (corners) {
+          for (const t of [{ x: d.y, y: d.x }, { x: -d.y, y: -d.x }]) slideFrom(s, p, x, y, t, threats, out);
+        }
         x += d.x;
         y += d.y;
       }
     }
   }
 
-  // extra step-directions grafted on by upgrades (springheel / sidestep / pivot)
-  for (const d of upgradeSteps(p)) {
-    const x = p.x + d.x;
-    const y = p.y + d.y;
-    if (!inBounds(s, x, y)) continue;
-    const occ = pieceAt(s, x, y);
-    if (threats || !occ || canLand(p, occ)) out.push({ x, y });
-  }
+  // Sidestep: a Slink may also take one plain square straight — the only way
+  // it ever changes which colour it walks. A real step: it can catch.
+  if (p.kind === 'slink' && hasUpgrade(p, 'sidestep')) for (const d of ORTHO) step(d);
 
   return dedup(out);
 }
 
-/**
- * Honeycake bonus: plain one-step moves onto empty squares. Never a capture
- * and never a threat — a spry critter's attack pattern stays its own.
- */
-function spryOut(s: FightState, p: Piece, threats: boolean): Vec[] {
-  if (!p.spry || threats) return [];
-  const out: Vec[] = [];
-  for (const d of ALL8) {
-    const x = p.x + d.x;
-    const y = p.y + d.y;
-    if (inBounds(s, x, y) && !pieceAt(s, x, y)) out.push({ x, y });
+/** Slide from (x, y) in direction d until something's in the way. */
+function slideFrom(s: FightState, p: Piece, x: number, y: number, d: Vec, threats: boolean, out: Vec[]) {
+  x += d.x;
+  y += d.y;
+  while (inBounds(s, x, y)) {
+    const occ = pieceAt(s, x, y);
+    if (occ) {
+      if (threats || canLand(p, occ)) out.push({ x, y });
+      return;
+    }
+    out.push({ x, y });
+    x += d.x;
+    y += d.y;
   }
-  return out;
 }
 
-/** Spry steps can coincide with a piece's own moves; collapse repeats. */
+/** Upgrade steps can coincide with a piece's own moves; collapse repeats. */
 function dedup(vs: Vec[]): Vec[] {
   const seen = new Set<number>();
   return vs.filter((v) => {

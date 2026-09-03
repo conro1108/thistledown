@@ -31,12 +31,16 @@ export function soundForEvent(type: FightEvent['type']): SoundName {
       return 'oof';
     case 'blocked':
     case 'shielded':
+    case 'pinned':
       return 'thud';
     case 'tempo':
     case 'flee':
     case 'cloaked':
     case 'warded':
+    case 'forked':
       return 'sparkle';
+    case 'swapped':
+      return 'move';
     case 'cornered':
       return 'fanfare';
     case 'stir':

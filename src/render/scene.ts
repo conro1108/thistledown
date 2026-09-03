@@ -1,4 +1,4 @@
-import { isPawn, isSlider, movesFor, pieceAt, threatsFor } from '../game/board';
+import { isPawn, isPinned, isSlider, movesFor, pieceAt, threatsFor } from '../game/board';
 import type { FightState, Telegraph, Vec } from '../game/types';
 import { ICONS, type IconName } from './icons';
 import { drawRankBadge, drawSprite } from './sprites';
@@ -137,7 +137,11 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
       for (const m of movesFor(s, p)) {
         ctx.fillStyle = shimmer ? 'rgba(255, 217, 102, 0.44)' : 'rgba(255, 217, 102, 0.32)';
         ctx.fillRect(m.x * TILE + 1, m.y * TILE + 1, TILE - 2, TILE - 2);
-        if (pieceAt(s, m.x, m.y)) {
+        const occ = pieceAt(s, m.x, m.y);
+        if (occ && occ.side === 'friend') {
+          // the Whistle's swap: a blue ring, not catch-brackets — a friend isn't prey
+          corners(ctx, m.x, m.y, '#78aaff');
+        } else if (occ) {
           // a catch: brackets, not a dot — the square already has a face in it
           corners(ctx, m.x, m.y, '#ffd966');
         } else {
@@ -201,6 +205,11 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
     // it stays put while they bob — a steady place to read "these two are the
     // same". Inset from the corner so it never buries a selection marker.
     drawRankBadge(ctx, p.kind, p.side, px + 2, py + 11);
+    // held fast: a forked creature wears the twig, a pinned one the thorn —
+    // the trinket's own icon, so the badge in the header and the mark on the
+    // board read as one thing
+    if (p.side === 'bramble' && p.stunned) pixelIcon(ctx, 'twig', px + 5, py - 5);
+    else if (p.side === 'bramble' && isPinned(s, p)) pixelIcon(ctx, 'thorn', px + 5, py - 5);
   }
 
   // capture / shaken / blocked effects

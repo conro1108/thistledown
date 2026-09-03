@@ -11,9 +11,8 @@ import {
   afterFightWon,
   buildFightConfig,
   campDue,
+  campBlossom,
   campHeal,
-  campSnack,
-  isSpry,
   newRun,
   offerRecruits,
   offerTrinkets,
@@ -46,7 +45,7 @@ export type LogEntry =
   | { t: 'trinket'; id: TrinketId }
   | { t: 'upgrade'; id: UpgradeId }
   | { t: 'heal' }
-  | { t: 'snack'; idx: number }
+  | { t: 'snack'; idx: number; kind: PromotionKind } // honeycake: a Sprout blossoms at the fire
   | { t: 'rest' }
   | { t: 'home' } // at the crossroads past the Bramble Heart: call it a win
   | { t: 'deeper' }; // …or press on into the deep regions
@@ -203,9 +202,7 @@ function step(s: Session, e: LogEntry): boolean {
       return true;
     }
     case 'snack': {
-      const c = s.run.companions[e.idx];
-      if (s.stage !== 'camp' || !c || isSpry(s.run, c)) return false;
-      campSnack(s.run, e.idx);
+      if (s.stage !== 'camp' || !campBlossom(s.run, e.idx, e.kind)) return false;
       leaveCamp(s);
       return true;
     }
@@ -308,8 +305,7 @@ function leavePost(s: Session) {
 
 /** Sit at the fire: roll what the wilds offer, then wait on one comfort. */
 function enterCamp(s: Session) {
-  // Wanderer's Map lays out two wild comforts to choose between instead of one.
-  s.trinketOffers = offerTrinkets(s.run, s.run.trinkets.includes('map') ? 2 : 1);
+  s.trinketOffers = offerTrinkets(s.run, 1);
   s.upgradeOffers = offerUpgrades(s.run, 1);
   s.stage = 'camp';
 }

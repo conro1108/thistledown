@@ -15,8 +15,8 @@ Go straight to the file; don't grep `src/` for a concept.
 
 | Want to change… | File |
 |---|---|
-| Board geometry, piece movement, threats | `src/game/board.ts` |
-| Fight loop, enemy AI, telegraphs, spread clock, Heart cornering | `src/game/fight.ts` |
+| Board geometry, piece movement, threats, upgrades, the pin | `src/game/board.ts` |
+| Fight loop, enemy AI, telegraphs, spread clock, Heart cornering, fork/swap/ward | `src/game/fight.ts` |
 | Which clearings exist, their enemies/dials/intro text | `src/game/ladder.ts` |
 | Run state, recruits, trinkets, upgrades, camp, spawn placement, critter blurbs | `src/game/run.ts` |
 | Decision log, stages, replay, save format | `src/game/session.ts` |

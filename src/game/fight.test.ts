@@ -8,6 +8,7 @@ import {
   type FightConfig,
   type Spawn,
 } from './fight';
+import { movesFor } from './board';
 import { mulberry32 } from './rng';
 import type { FightState } from './types';
 
@@ -206,5 +207,54 @@ describe('the bramble spreads', () => {
     const sprouted = s.pieces.filter((p) => p.side === 'bramble' && p.kind === 'thistle');
     expect(sprouted.some((p) => p.x === spot.x && p.y === spot.y)).toBe(true);
     expect(sprouted).toHaveLength(2);
+  });
+});
+
+describe('the powerups', () => {
+  it('Forked Twig: landing on a fork freezes both creatures for the coming move', () => {
+    // a hopper lands on a square attacking two thistles at once
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'hopper', x: 0, y: 5 }],
+      [{ kind: 'thistle', x: 0, y: 1 }, { kind: 'thistle', x: 2, y: 1 }, { kind: 'thistle', x: 5, y: 0 }],
+      3, 6, 6,
+      { fork: true },
+    );
+    expect(playerMove(s, idAt(s, 0, 5), { x: 1, y: 3 })).toBe(true); // attacks (0,1) and (2,1)
+    expect(s.events.some((e) => e.type === 'forked')).toBe(true);
+    const frozen = s.pieces.filter((p) => p.side === 'bramble' && p.stunned);
+    expect(frozen.map((p) => `${p.x},${p.y}`).sort()).toEqual(['0,1', '2,1']);
+    resolveEnemyTurn(s);
+    // the forked pair didn't move; the stun then lifts for the next round
+    expect(s.pieces.some((p) => p.x === 0 && p.y === 1)).toBe(true);
+    expect(s.pieces.some((p) => p.x === 2 && p.y === 1)).toBe(true);
+    expect(s.pieces.some((p) => p.stunned)).toBe(false);
+  });
+
+  it('Thorn Pin: a creature in a lane with something dearer behind it cannot move', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 5, y: 5 }, { kind: 'rumble', x: 0, y: 3 }],
+      [{ kind: 'thistle', x: 2, y: 3 }, { kind: 'golem', x: 4, y: 3 }],
+      2, 6, 6,
+      { pin: true },
+    );
+    const thistle = s.pieces.find((p) => p.kind === 'thistle')!;
+    expect(movesFor(s, thistle)).toEqual([]);
+    // and the golem, with nothing dearer behind it, is free
+    expect(movesFor(s, s.pieces.find((p) => p.kind === 'golem')!).length).toBeGreaterThan(0);
+  });
+
+  it('Acorn Whistle: the Keeper trades places with a neighbour, once', () => {
+    const s = fight(
+      [{ kind: 'keeper', x: 2, y: 5 }, { kind: 'rumble', x: 2, y: 4 }],
+      [{ kind: 'thistle', x: 0, y: 0 }],
+      1, 6, 6,
+      { whistle: true },
+    );
+    const k = idAt(s, 2, 5);
+    expect(playerMove(s, k, { x: 2, y: 4 })).toBe(true);
+    expect(s.pieces.find((p) => p.id === k)).toMatchObject({ x: 2, y: 4 });
+    expect(s.pieces.find((p) => p.kind === 'rumble')).toMatchObject({ x: 2, y: 5 });
+    expect(s.swapLeft).toBe(0);
+    expect(movesFor(s, s.pieces.find((p) => p.id === k)!).some((m) => m.x === 2 && m.y === 5)).toBe(false);
   });
 });

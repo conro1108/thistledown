@@ -8,24 +8,23 @@ import type { FX } from '../render/scene';
 
 export const TRINKET_ICONS: Record<TrinketId, IconName> = {
   cloak: 'cloak',
-  whistle: 'acorn',
-  breakfast: 'pancakes',
   ward: 'leaf',
-  riser: 'teacup',
-  luck: 'sparkle',
+  breakfast: 'pancakes',
+  fork: 'twig',
+  pin: 'thorn',
+  whistle: 'acorn',
+  glow: 'jar',
   dew: 'blossom',
-  map: 'scales',
-  trail: 'fern',
 };
 
 /** Each movement upgrade's pixel icon — a card face for the campfire. */
 export const UPGRADE_ICONS: Record<UpgradeId, IconName> = {
-  thornstep: 'sprout',
-  rootgrip: 'leaf',
-  springheel: 'acorn',
-  sidestep: 'fern',
+  longstride: 'sprout',
+  rootgrip: 'fern',
+  longlegs: 'tulip',
+  sidestep: 'scales',
   underbrush: 'bloom',
-  pivot: 'scales',
+  cornering: 'wolf',
 };
 
 /** A one-line move phrase for the compact recruit cards (KIND_INFO blurbs run long). */
@@ -53,7 +52,7 @@ export const SAVE_BEAT_MS = 660; // a Ward/Cloak save holds the turn open to be 
 export const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 // v5: movement upgrades + expanded, region-gated trinkets shift the run's RNG
 // draw order, so older decision logs no longer replay faithfully — let them go
-export const SAVE_KEY = 'overgrown.save.v6'; // v6: the spread clock was retuned, so old logs replay differently
+export const SAVE_KEY = 'overgrown.save.v7'; // v7: the powerups were reworked — trinket/upgrade ids and offers changed
 export const SCORES_KEY = 'overgrown.scores.v1';
 export const JOURNAL_KEY = 'overgrown.journal.v1';
 
@@ -88,6 +87,8 @@ export const S = {
   savedAt: 0,
   /** the enemy the player just caught mid-lunge (its telegraph died with it) */
   tempoKind: null as Kind | null,
+  /** the player just forked two creatures — the line to shout while the bramble stalls */
+  forkNote: null as string | null,
   /** looking back through this clearing's moves (view-only, replay-built) */
   history: null as { states: { f: FightState; label: string }[]; idx: number } | null,
   /**

@@ -186,6 +186,8 @@ function showDevPanel() {
     }
     clock.append(
       devRow({ label: 'cloak charges', get: () => f.cloakLeft, set: (v) => (f.cloakLeft = Math.max(0, Math.round(v))), step: 1 }),
+      devRow({ label: 'ward charges', get: () => f.wardLeft, set: (v) => (f.wardLeft = Math.max(0, Math.round(v))), step: 1 }),
+      devRow({ label: 'whistle swaps', get: () => f.swapLeft, set: (v) => (f.swapLeft = Math.max(0, Math.round(v))), step: 1 }),
       devRow({ label: 'free moves', get: () => f.freeMoves, set: (v) => (f.freeMoves = Math.max(0, Math.round(v))), step: 1 }),
     );
   }
@@ -294,7 +296,7 @@ function showDevPanel() {
         spread: S.fight.spread ?? null,
         pendingSprout: S.fight.pendingSprout,
         telegraphs: S.fight.telegraphs,
-        pieces: S.fight.pieces.map((p) => `#${p.id} ${p.side[0]} ${p.kind} @${p.x},${p.y}${p.spry ? ' spry' : ''}${p.fickle ? ' fickle' : ''}${p.veiled ? ' veiled' : ''}`),
+        pieces: S.fight.pieces.map((p) => `#${p.id} ${p.side[0]} ${p.kind} @${p.x},${p.y}${p.stunned ? ' stunned' : ''}${p.fickle ? ' fickle' : ''}${p.veiled ? ' veiled' : ''}`),
       },
       null,
       1,

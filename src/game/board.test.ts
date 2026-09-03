@@ -65,3 +65,29 @@ describe('movement', () => {
     expect(has(threatsFor(s, at(s, 2, 3)), 2, 0)).toBe(true);
   });
 });
+
+describe('movement upgrades', () => {
+  it('Cornering: a Rumble turns one corner mid-charge; Long Stride doubles from home', () => {
+    const s = createFight(
+      {
+        name: 't', w: 6, h: 6, actsPerTurn: 1,
+        friends: [
+          { kind: 'keeper', x: 5, y: 5 },
+          { kind: 'rumble', x: 0, y: 5, upgrades: ['cornering'] },
+          { kind: 'sprout', x: 3, y: 4, upgrades: ['longstride'] },
+        ],
+        enemies: [{ kind: 'thistle', x: 2, y: 0 }],
+      },
+      mulberry32(1),
+    );
+    const rumble = s.pieces.find((p) => p.kind === 'rumble')!;
+    const rm = movesFor(s, rumble);
+    expect(has(rm, 2, 0)).toBe(true); // up the file, then along the rank: the thistle
+    expect(has(rm, 4, 4)).toBe(true); // along the rank, then up
+    expect(has(rm, 1, 4)).toBe(true); // a plain diagonal-looking square, reached by cornering
+    const sprout = s.pieces.find((p) => p.kind === 'sprout')!;
+    expect(has(movesFor(s, sprout), 3, 2)).toBe(true);
+    sprout.y = 3; // off the home row: back to one step
+    expect(has(movesFor(s, sprout), 3, 1)).toBe(false);
+  });
+});

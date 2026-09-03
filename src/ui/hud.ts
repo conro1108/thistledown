@@ -2,8 +2,9 @@
 // text helpers the hint line and cards share.
 import { enemies } from '../game/fight';
 import { DEEP_FIGHTS, isDeep, SURFACE_FIGHTS } from '../game/ladder';
-import { activeUpgrades, isSpry, KIND_INFO, TRINKETS, upgradeClearingsLeft, UPGRADES } from '../game/run';
-import type { Kind } from '../game/types';
+import { activeUpgrades, KIND_INFO, TRINKETS, upgradeClearingsLeft, UPGRADES } from '../game/run';
+import { isPinned } from '../game/board';
+import type { Kind, Piece } from '../game/types';
 import { iconEl, iconHTML, type IconName } from '../render/icons';
 import { drawSprite } from '../render/sprites';
 import { devBtn, historyBtn, hudName, rosterEl, statusEl, statusLineEl, trinketsEl } from './dom';
@@ -77,10 +78,11 @@ export function refreshHud() {
     // a real button: title= tooltips don't exist on a phone
     const t = document.createElement('button');
     t.className = 'trinket';
-    // The Cloak and the Ward hold one charge per clearing. A spent one that
-    // still looks fully lit is a promise the game can't keep — so it dims, and
-    // the one that just fired flashes gold to tie the save to its cause.
-    const charge = id === 'cloak' ? S.fight.cloakLeft : id === 'ward' ? S.fight.wardLeft : null;
+    // The Cloak, the Ward and the Whistle hold one charge per clearing. A spent
+    // one that still looks fully lit is a promise the game can't keep — so it
+    // dims, and the one that just fired flashes gold to tie the save to its cause.
+    const charge =
+      id === 'cloak' ? S.fight.cloakLeft : id === 'ward' ? S.fight.wardLeft : id === 'whistle' ? S.fight.swapLeft : null;
     if (charge === 0) t.classList.add('spent');
     if (S.savedBy === id) {
       t.classList.add('fired');
@@ -128,7 +130,7 @@ function renderRoster() {
     const pieceId = S.companionPieceId.get(i);
     const alive = pieceId != null && S.fight.pieces.some((p) => p.id === pieceId);
     rosterEl.append(
-      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? 'zzz' : isSpry(S.run, c) ? 'honey' : undefined),
+      rosterButton(c.kind, pieceId ?? -1, c.shaken || !alive, c.shaken ? 'zzz' : undefined),
     );
   }
 }
@@ -210,7 +212,7 @@ function describeInFight(p: {
   side: string;
   veiled?: boolean;
   fickle?: boolean;
-  spry?: boolean;
+  stunned?: boolean;
 }): string {
   let txt = describe(p.kind);
   const twin = TWIN[p.kind];
@@ -221,10 +223,10 @@ function describeInFight(p: {
         : ` Same pip as their ${KIND_INFO[twin].title} — they move exactly the same.`;
   }
   if (p.side === 'bramble') {
-    if (p.veiled) txt += ' Shrouded — no arrow. The lit squares are everywhere it could strike.';
+    if (p.stunned) txt += ` Forked ${iconHTML('twig')} — frozen until the bramble’s next move.`;
+    else if (S.fight && isPinned(S.fight, p as Piece)) txt += ` Pinned ${iconHTML('thorn')} — it can’t move without exposing something dearer.`;
+    else if (p.veiled && !S.fight?.glow) txt += ' Shrouded — no arrow. The lit squares are everywhere it could strike.';
     else if (p.fickle) txt += ' Fickle — two arrows, and it takes whichever looks tastier.';
-  } else if (p.spry) {
-    txt += ` Spry ${iconHTML('honey')} — may also take a plain one-step, any direction. A stroll, never a pounce.`;
   }
   return txt;
 }

@@ -3,7 +3,7 @@
 import { movesFor } from '../game/board';
 import { DEEP_FIGHTS, REGION_NAMES, regionOf, themeRegion } from '../game/ladder';
 import type { PromotionKind } from '../game/fight';
-import { isSpry, KIND_INFO, ROSTER_CAP, TEMP_LIFESPAN, TRINKETS, UPGRADES } from '../game/run';
+import { KIND_INFO, ROSTER_CAP, TEMP_LIFESPAN, TRINKETS, UPGRADES } from '../game/run';
 import { movesThisClearing, newSession, retryFight, totalMoves } from '../game/session';
 import { iconHTML, type IconName } from '../render/icons';
 import { TILE } from '../render/scene';
@@ -394,7 +394,7 @@ function trinketFound() {
 function campStop() {
   if (!S.sess || !S.run) return;
   const shaken = S.run.companions.filter((c) => c.shaken).map((c) => c.kind);
-  const snackable = S.run.companions.some((c) => !isSpry(S.run!, c));
+  const sprouts = S.run.companions.filter((c) => c.kind === 'sprout').length;
   const choices: SceneOption[] = [];
   if (shaken.length) {
     choices.push({
@@ -407,11 +407,11 @@ function campStop() {
       },
     });
   }
-  if (snackable) {
+  if (sprouts) {
     choices.push({
       icon: 'honey',
       label: 'Honeycake',
-      detail: `One friend gets a spring in their step for the next ${TEMP_LIFESPAN} clearings. (A plain sidestep, any direction.)`,
+      detail: 'Feed a Sprout and it blossoms right here by the fire — a Hopper, a Slink, a Rumble — no far edge required.',
       fn: honeycakeChoice,
     });
   }
@@ -453,60 +453,65 @@ function campStop() {
   );
 }
 
+/** Honeycake: which Sprout, then what it becomes. One log entry, two taps. */
 function honeycakeChoice() {
   if (!S.run) return;
+  const sprouts = S.run.companions.map((c, i) => ({ c, i })).filter(({ c }) => c.kind === 'sprout');
+  const pick = (idx: number) =>
+    showChoiceScene(
+      `Something blossoms ${iconHTML('sparkle', 'p2')}`,
+      `${S.run!.companions[idx].name} eats the whole cake. Who do they become?`,
+      blossomOptions((kind) => {
+        doEntry({ t: 'snack', idx, kind });
+        stageUi();
+      }),
+    );
+  if (sprouts.length === 1) return pick(sprouts[0].i);
   showChoiceScene(
     `Honeycake ${iconHTML('honey', 'p2')}`,
     'Who gets it? (No take-backs — it is a very good cake.)',
-    S.run.companions
-      .map((c, i) => ({ c, i }))
-      .filter(({ c }) => !isSpry(S.run!, c))
-      .map(({ c, i }) => ({
-        kind: c.kind,
-        label: c.name,
-        detail: `${c.name} the ${KIND_INFO[c.kind].title} gains a plain one-step move in any direction, for the next ${TEMP_LIFESPAN} clearings.`,
-        fn: () => {
-          doEntry({ t: 'snack', idx: i });
-          stageUi();
-        },
-      })),
+    sprouts.map(({ c, i }) => ({
+      kind: c.kind,
+      label: c.name,
+      detail: `${c.name} the Sprout blossoms into something new.`,
+      fn: () => pick(i),
+    })),
   );
 }
 
-
-
-export function promotionChoice() {
+/**
+ * The forms a Sprout can take, in the order worth reading. Penning the Heart
+ * in takes straight lanes: a band of nothing but leapers and diagonal slinkers
+ * can chase it around a clearing forever without ever building a wall. When
+ * the band has no lane-holder, lead with the Rumble and say plainly why — this
+ * is the choice that decides whether a beginner's run stays winnable.
+ */
+function blossomOptions(choose: (kind: PromotionKind) => void): SceneOption[] {
   const options: PromotionKind[] = ['hopper', 'slink', 'rumble'];
   // the Duchess only answers late in the run
   if (S.run && S.run.fightIndex >= 4) options.push('duchess');
-  // Penning the Heart in takes straight lanes: a band of nothing but leapers
-  // and diagonal slinkers can chase it around a clearing forever without ever
-  // building a wall. When the player has no lane-holder on the field, lead with
-  // the Rumble and say plainly why — this is the choice that decides whether a
-  // beginner's run stays winnable.
-  const laneHolder = S.fight?.pieces.some(
-    (p) => p.side === 'friend' && (p.kind === 'rumble' || p.kind === 'duchess'),
-  );
+  const laneHolder = S.run?.companions.some((c) => c.kind === 'rumble' || c.kind === 'duchess');
   if (!laneHolder) options.sort((a, b) => (a === 'rumble' ? -1 : b === 'rumble' ? 1 : 0));
+  return options.map((kind) => ({
+    kind,
+    label: !laneHolder && kind === 'rumble' ? `${KIND_INFO[kind].title} — the safe pick` : KIND_INFO[kind].title,
+    detail:
+      !laneHolder && kind === 'rumble'
+        ? `${KIND_INFO[kind].blurb} Straight lanes are what fence the Heart in — right now nobody in your band holds one.`
+        : KIND_INFO[kind].blurb,
+    fn: () => choose(kind),
+  }));
+}
+
+export function promotionChoice() {
   showChoiceScene(
     `Something blossoms ${iconHTML('sparkle', 'p2')}`,
     'Crossing the whole meadow changes a critter. Who do they become?',
-    options.map((kind) => ({
-      kind,
-      label:
-        !laneHolder && kind === 'rumble'
-          ? `${KIND_INFO[kind].title} — the safe pick`
-          : KIND_INFO[kind].title,
-      detail:
-        !laneHolder && kind === 'rumble'
-          ? `${KIND_INFO[kind].blurb} Straight lanes are what fence the Heart in — right now nobody in your band holds one.`
-          : KIND_INFO[kind].blurb,
-      fn: () => {
-        doEntry({ t: 'promote', kind });
-        drainEvents();
-        refreshHud();
-        proceedAfterPlayerAction();
-      },
-    })),
+    blossomOptions((kind) => {
+      doEntry({ t: 'promote', kind });
+      drainEvents();
+      refreshHud();
+      proceedAfterPlayerAction();
+    }),
   );
 }

@@ -1,5 +1,5 @@
 import { threatsFor } from './board';
-import type { FightConfig, Spawn } from './fight';
+import type { FightConfig, PromotionKind, Spawn } from './fight';
 import { COST, FIGHTS_PER_REGION, generateFights, regionOf, scaleDials, type FightSpec } from './ladder';
 import { mulberry32 } from './rng';
 import type { FightState, Kind, Piece, Rng, UpgradeId } from './types';
@@ -8,12 +8,6 @@ export interface Companion {
   kind: Kind;
   name: string;
   shaken: boolean;
-  /**
-   * Ate a honeycake: a plain one-step move, but only for a while. Holds the
-   * clearing index the spring wears off *before* (active while
-   * `fightIndex < spryUntil`) — comforts are temporary now, not run-long.
-   */
-  spryUntil?: number;
 }
 
 /** A movement upgrade the band carries, and the clearing index it fades before. */
@@ -23,9 +17,9 @@ export interface OwnedUpgrade {
 }
 
 /**
- * Movement upgrades and honeycakes are temporary: they last this many clearings
- * from the campfire they're picked up at, then fade. Trinkets stay run-long —
- * they're the run-defining relics; these smaller bends are the fast-spent treats.
+ * Movement upgrades are temporary: they last this many clearings from the
+ * campfire they're picked up at, then fade. Trinkets stay run-long — they're
+ * the run-defining relics; these smaller bends are the fast-spent treats.
  */
 export const TEMP_LIFESPAN = 3;
 
@@ -179,7 +173,7 @@ export function offerRecruits(run: RunState): Kind[] {
           : r === 2
             ? ['slink', 'rumble']
             : ['slink', 'rumble', 'duchess'];
-  const want = Math.min(run.trinkets.includes('luck') ? 3 : 2, pool.length);
+  const want = Math.min(2, pool.length);
   const bag = [...pool];
   const out: Kind[] = [];
   while (out.length < want && bag.length) {
@@ -205,62 +199,54 @@ export function recruit(run: RunState, kind: Kind) {
 
 // ---------- trinkets ----------
 
-export type TrinketId =
-  | 'cloak'
-  | 'whistle'
-  | 'breakfast'
-  | 'ward'
-  | 'riser'
-  | 'luck'
-  | 'dew'
-  | 'map'
-  | 'trail';
+export type TrinketId = 'cloak' | 'ward' | 'breakfast' | 'fork' | 'pin' | 'whistle' | 'glow' | 'dew';
 
-/** `region` gates a trinket behind ladder progress — new relics keep surfacing. */
+/**
+ * Relics. Every one of them happens *on the board*, in a moment you can point
+ * at — a rescue, a freeze, a swap — and no two share a mechanic. Three of them
+ * are tactics with their real names (fork, pin) or their real shape (the
+ * Keeper's swap): the trinket is how the name gets learned.
+ * `region` gates a trinket behind ladder progress — new relics keep surfacing.
+ */
 export const TRINKETS: Record<TrinketId, { title: string; blurb: string; region: number }> = {
   cloak: {
     title: 'Dandelion Cloak',
     blurb: 'Once each clearing, a caught friend (never the Keeper) drifts safely back to your home row instead.',
     region: 0,
   },
-  whistle: {
-    title: 'Acorn Whistle',
-    blurb: 'Every Hopper can also take a plain one-step move, any direction.',
+  ward: {
+    title: 'Bramble Ward',
+    blurb: 'Once each clearing, the Keeper shrugs off a catch and stands its ground. The attacker recoils.',
     region: 0,
   },
   breakfast: {
     title: 'Second Breakfast',
-    blurb: 'Once each clearing, your first move comes with a second helping — an extra move that can’t snatch anything.',
+    blurb: 'Catch a creature mid-lunge — arrow and all — and take a second step right away. A stretch, not a snatch.',
     region: 0,
   },
-  ward: {
-    title: 'Bramble Ward',
-    blurb: 'Once each clearing, the first friend the bramble would catch — the Keeper too — shrugs it off; the attacker recoils.',
+  fork: {
+    title: 'Forked Twig',
+    blurb: 'Land where you threaten two creatures at once and both freeze on the spot. A fork: they can only save one, and now not even that.',
     region: 0,
   },
-  riser: {
-    title: 'Early Riser',
-    blurb: 'Your opening move each clearing is followed by a free stretch — an extra, non-snatching move. Stacks with Second Breakfast for two.',
-    region: 0,
-  },
-  luck: {
-    title: 'Beginner’s Luck',
-    blurb: 'Every recruit shows a third friend to choose from.',
+  whistle: {
+    title: 'Acorn Whistle',
+    blurb: 'Once each clearing, the Keeper may trade places with a friend standing beside it. A quick duck behind a wall.',
     region: 1,
   },
-  map: {
-    title: 'Wanderer’s Map',
-    blurb: 'Every campfire lays out two comforts from the wilds to pick between, not one.',
+  pin: {
+    title: 'Thorn Pin',
+    blurb: 'A creature caught in a Slink or Rumble’s lane with something dearer behind it is pinned — it cannot move at all.',
     region: 1,
   },
   dew: {
     title: 'Morning Dew',
     blurb: 'Friends caught in a fight are never left shaken — they rejoin the band ready for the next clearing.',
-    region: 2,
+    region: 1,
   },
-  trail: {
-    title: 'Trailmarker',
-    blurb: 'The bramble is slower to reinforce — the spread clock gives you three extra turns before it stirs.',
+  glow: {
+    title: 'Glowworm Jar',
+    blurb: 'Shrouded creatures show their arrows after all. Nothing in the dark keeps a secret from a jar of glowworms.',
     region: 2,
   },
 };
@@ -290,9 +276,9 @@ export function takeTrinket(run: RunState, id: TrinketId) {
  * ladder progress so new tricks keep surfacing as you push deeper.
  */
 export const UPGRADES: Record<UpgradeId, { title: string; blurb: string; kind: Kind; region: number }> = {
-  thornstep: {
-    title: 'Thornstep',
-    blurb: 'Every Sprout can waddle one step diagonally forward onto open ground — not just poke.',
+  longstride: {
+    title: 'Long Stride',
+    blurb: 'A Sprout still on its home row may take two steps forward at once. The first step is the eager one.',
     kind: 'sprout',
     region: 0,
   },
@@ -302,9 +288,9 @@ export const UPGRADES: Record<UpgradeId, { title: string; blurb: string; kind: K
     kind: 'sprout',
     region: 1,
   },
-  springheel: {
-    title: 'Springheel',
-    blurb: 'Every Hopper can also make a short one-step diagonal hop, in addition to its long leap.',
+  longlegs: {
+    title: 'Long Legs',
+    blurb: 'Every Hopper also leaps a stretched L — three along and one across — right over anything.',
     kind: 'hopper',
     region: 1,
   },
@@ -320,9 +306,9 @@ export const UPGRADES: Record<UpgradeId, { title: string; blurb: string; kind: K
     kind: 'slink',
     region: 2,
   },
-  pivot: {
-    title: 'Pivot',
-    blurb: 'Every Rumble can also take one short diagonal step, off its straight lanes.',
+  cornering: {
+    title: 'Cornering',
+    blurb: 'A Rumble may turn one corner mid-charge: barrel down a lane, swing ninety degrees, keep going.',
     kind: 'rumble',
     region: 2,
   },
@@ -384,15 +370,12 @@ export function campHeal(run: RunState) {
   for (const c of run.companions) c.shaken = false;
 }
 
-/** Whether a companion's honeycake spring is still in their step this clearing. */
-export function isSpry(run: RunState, c: Companion): boolean {
-  return c.spryUntil !== undefined && run.fightIndex < c.spryUntil;
-}
-
-/** Honeycake: one companion gains a plain one-step move for TEMP_LIFESPAN clearings. */
-export function campSnack(run: RunState, companionIdx: number) {
+/** Honeycake: a Sprout blossoms by the fire, no far edge required. */
+export function campBlossom(run: RunState, companionIdx: number, kind: PromotionKind): boolean {
   const c = run.companions[companionIdx];
-  if (c) c.spryUntil = run.fightIndex + TEMP_LIFESPAN;
+  if (!c || c.kind !== 'sprout') return false;
+  c.kind = kind;
+  return true;
 }
 
 export interface BuiltFight {
@@ -475,22 +458,10 @@ export function buildFightConfig(run: RunState): BuiltFight {
     const x = cx + offset;
     if (x < 0 || x >= spec.w) return;
     if (c.kind === 'slink') slinkColors.push(colorOf(offset));
-    const whistled = run.trinkets.includes('whistle') && c.kind === 'hopper';
     const ups = upgradesForKind(run, c.kind);
-    friends.push({
-      kind: c.kind,
-      x,
-      y,
-      spry: isSpry(run, c) || whistled || undefined,
-      upgrades: ups.length ? ups : undefined,
-    });
+    friends.push({ kind: c.kind, x, y, upgrades: ups.length ? ups : undefined });
     lineup.push(i);
   });
-  // Trailmarker slows the reinforcement clock: three extra turns before it stirs.
-  const spread =
-    spec.spread && run.trinkets.includes('trail')
-      ? { ...spec.spread, after: spec.spread.after + 3 }
-      : spec.spread;
   return {
     cfg: {
       name: spec.name,
@@ -500,12 +471,14 @@ export function buildFightConfig(run: RunState): BuiltFight {
       enemies: placeEnemies(spec, run.rng, friends),
       actsPerTurn: spec.acts,
       dials: scaleDials(spec.dials, run.difficulty ?? 1),
-      spread,
+      spread: spec.spread,
       cloak: run.trinkets.includes('cloak'),
-      secondBreakfast: run.trinkets.includes('breakfast'),
-      whistle: run.trinkets.includes('whistle'),
       ward: run.trinkets.includes('ward'),
-      riser: run.trinkets.includes('riser'),
+      breakfast: run.trinkets.includes('breakfast'),
+      fork: run.trinkets.includes('fork'),
+      pin: run.trinkets.includes('pin'),
+      whistle: run.trinkets.includes('whistle'),
+      glow: run.trinkets.includes('glow'),
     },
     lineup,
   };

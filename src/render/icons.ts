@@ -33,7 +33,10 @@ export type IconName =
   | 'sound'
   | 'muted'
   | 'warning'
-  | 'question';
+  | 'question'
+  | 'twig'
+  | 'thorn'
+  | 'jar';
 
 // the daisy shape is the game's whole motif, so three flowers share it in
 // different meadow colorways (white, pink, pale) — cheap variety for petals
@@ -410,6 +413,60 @@ export const ICONS: Record<IconName, Sprite> = {
       '..yyykkyyy..',
       '.yyyyyyyyyy.',
       '.yyyyyyyyyy.',
+      '............',
+    ],
+  },
+  // a forked twig — the Forked Twig trinket, and the on-board "frozen" mark
+  twig: {
+    colors: { b: '#8a5a3a', l: '#a8c860' },
+    rows: [
+      '............',
+      '..l......l..',
+      '..b......b..',
+      '...b....b...',
+      '...b....b...',
+      '....b..b....',
+      '.....bb.....',
+      '.....b......',
+      '.....b......',
+      '.....b......',
+      '.....b......',
+      '............',
+    ],
+  },
+  // a thorn driven in — the Thorn Pin, and the on-board "held fast" mark
+  thorn: {
+    colors: { t: '#d96a3a', d: '#8a3a2a', W: '#fff6d8' },
+    rows: [
+      '............',
+      '.....WW.....',
+      '....Wtt.....',
+      '....ttt.....',
+      '.....tt.....',
+      '.....tt.....',
+      '.....td.....',
+      '.....td.....',
+      '......d.....',
+      '......d.....',
+      '......d.....',
+      '............',
+    ],
+  },
+  // a jar of glowworms — the Glowworm Jar
+  jar: {
+    colors: { g: '#b8c4d8', y: '#ffd166', W: '#fff6d8', k: '#8a5a3a' },
+    rows: [
+      '............',
+      '....kkkk....',
+      '...gggggg...',
+      '...g....g...',
+      '...g.y..g...',
+      '...g..y.g...',
+      '...gy...g...',
+      '...g..W.g...',
+      '...g.y..g...',
+      '...g....g...',
+      '...gggggg...',
       '............',
     ],
   },

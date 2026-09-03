@@ -35,7 +35,8 @@ export function attemptMove(pieceId: number, to: Vec) {
   S.selected = null;
   S.inspect = null;
   // a plain step gets a soft place-click; a capture speaks for itself in drainEvents
-  if (!S.fight.events.some((e) => e.type === 'capture')) playSfx('move');
+  if (!S.fight.events.some((e) => e.type === 'capture' || e.type === 'forked')) playSfx('move');
+  S.forkNote = null;
   drainEvents();
   refreshHud();
   proceedAfterPlayerAction();
@@ -128,11 +129,13 @@ export function beginEnemyTurn() {
   const anyAction = snapTelegraphs.some((t) => t.to);
   const stolen = S.tempoKind ? KIND_INFO[S.tempoKind].title : null;
   S.tempoKind = null;
-  hintEl.innerHTML = stolen
-    ? `You caught the ${stolen} mid-lunge! ${iconHTML('daisy')}`
-    : anyAction
-      ? "Watch the bramble's move…"
-      : 'The bramble stirs…';
+  hintEl.innerHTML =
+    S.forkNote ??
+    (stolen
+      ? `You caught the ${stolen} mid-lunge! ${iconHTML('daisy')}`
+      : anyAction
+        ? "Watch the bramble's move…"
+        : 'The bramble stirs…');
   refreshHud();
 
   const snapPositions = new Map<number, Vec>(
@@ -216,6 +219,8 @@ const NOTE_PRI = {
   flee: 3, // the Heart bolted from your net
   sprouted: 2, // a fresh Thistle broke soil
   stir: 1, // the spread clock ticked
+  pinned: 4, // a pinned creature's committed move went nowhere — say why
+  forked: 5, // your fork froze two of them
 } as const;
 
 export function drainEvents() {
@@ -259,6 +264,14 @@ export function drainEvents() {
       note(NOTE_PRI.flee, 'Your trap springs — the Bramble Heart scrambles for safety!');
     } else if (ev.type === 'cornered') {
       S.fx.push({ at: ev.at, kind: 'poof', t: 0 });
+    } else if (ev.type === 'forked') {
+      S.fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      S.forkNote = `Fork! ${iconHTML('twig')} Your ${KIND_INFO[ev.kind].title} threatens two at once — both freeze on the spot.`;
+    } else if (ev.type === 'pinned') {
+      S.fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      note(NOTE_PRI.pinned, `The ${KIND_INFO[ev.kind].title} is pinned ${iconHTML('thorn')} — it can’t move without exposing what’s behind it.`);
+    } else if (ev.type === 'swapped') {
+      S.fx.push({ at: ev.at, kind: 'bonk', t: 0 });
     } else if (ev.type === 'stir') {
       note(NOTE_PRI.stir, 'The soil stirs — the bramble is spreading! Stand on the marked square to smother it.');
     } else if (ev.type === 'sprouted') {

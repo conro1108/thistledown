@@ -1,11 +1,11 @@
-import { inBounds, isPawn, isSlider, movesFor, pieceAt, threatsFor } from './board';
+import { inBounds, isPawn, isPinned, isSlider, movesFor, PIECE_VALUE, pieceAt, threatsFor } from './board';
+export { PIECE_VALUE } from './board';
 import type { AiDials, FightState, Kind, Piece, Rng, SpreadConfig, Telegraph, UpgradeId, Vec } from './types';
 
 export interface Spawn {
   kind: Kind;
   x: number;
   y: number;
-  spry?: boolean;
   /** movement upgrades (friend-only), applied by kind in buildFightConfig */
   upgrades?: UpgradeId[];
   /** telegraphs two options, resolves the better one (later-region spice) */
@@ -24,22 +24,6 @@ export const NAIVE_DIALS: AiDials = { foresight: 0, caution: 0, bloodlust: 1, te
  */
 export const DEFAULT_SPREAD_GATE = 0.45;
 
-/** Chess piece values in disguise — the exchange math the dials reason with. */
-export const PIECE_VALUE: Record<Kind, number> = {
-  keeper: 1000,
-  sprout: 10,
-  hopper: 30,
-  slink: 30,
-  rumble: 50,
-  duchess: 90,
-  thistle: 10,
-  tumbleweed: 30,
-  creeper: 30,
-  golem: 50,
-  gloom: 90,
-  heart: 0, // can't be captured; it plays by the king rule instead
-};
-
 export interface FightConfig {
   name: string;
   w: number;
@@ -51,14 +35,14 @@ export interface FightConfig {
   dials?: Partial<AiDials>;
   /** reinforcement clock — stalling past `after` turns grows fresh thistles */
   spread?: SpreadConfig;
-  /** trinkets along for this fight */
+  /** trinkets along for this fight — see TRINKETS in run.ts */
   cloak?: boolean;
-  secondBreakfast?: boolean;
-  whistle?: boolean;
-  /** Bramble Ward: negate the first capture this clearing (Keeper included) */
   ward?: boolean;
-  /** Early Riser: bank a second first-move stretch on top of Second Breakfast */
-  riser?: boolean;
+  breakfast?: boolean;
+  fork?: boolean;
+  pin?: boolean;
+  whistle?: boolean;
+  glow?: boolean;
 }
 
 export function createFight(cfg: FightConfig, rng: Rng): FightState {
@@ -86,10 +70,13 @@ export function createFight(cfg: FightConfig, rng: Rng): FightState {
     pendingPromotion: null,
     cloakLeft: cfg.cloak ? 1 : 0,
     wardLeft: cfg.ward ? 1 : 0,
-    // Second Breakfast banks one first-move stretch; Early Riser banks another (they stack).
-    freeMoves: (cfg.secondBreakfast ? 1 : 0) + (cfg.riser ? 1 : 0),
+    swapLeft: cfg.whistle ? 1 : 0,
+    breakfast: !!cfg.breakfast,
+    freeMoves: 0,
     freeMoveActive: false,
-    whistle: !!cfg.whistle,
+    fork: !!cfg.fork,
+    pin: !!cfg.pin,
+    glow: !!cfg.glow,
   };
   assignTelegraphs(s);
   return s;
@@ -119,19 +106,38 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
   const p = s.pieces.find((q) => q.id === pieceId);
   if (!p || p.side !== 'friend') return false;
   if (!movesFor(s, p).some((m) => m.x === to.x && m.y === to.y)) return false;
+  const wasStretch = s.freeMoveActive;
   s.freeMoveActive = false;
+  // what this piece already had its eye on, so a fork means something *new*
+  const before = new Set(threatsFor(s, p).map((t) => t.y * 64 + t.x));
 
   const occ = pieceAt(s, to.x, to.y);
-  if (occ) {
+  if (occ && occ.side === 'friend') {
+    // Acorn Whistle: the Keeper and a friend trade places
+    s.swapLeft--;
+    occ.x = p.x;
+    occ.y = p.y;
+    s.events.push({ type: 'swapped', at: { x: to.x, y: to.y }, kind: occ.kind, to: { x: occ.x, y: occ.y } });
+  } else if (occ) {
     // catching an enemy mid-lunge steals the bramble's move — worth celebrating
     const hadPlan = s.telegraphs.some((t) => t.pieceId === occ.id && t.to != null);
     s.pieces = s.pieces.filter((q) => q.id !== occ.id);
     s.telegraphs = s.telegraphs.filter((t) => t.pieceId !== occ.id);
     s.events.push({ type: 'capture', at: { x: to.x, y: to.y }, kind: occ.kind });
-    if (hadPlan) s.events.push({ type: 'tempo', at: { x: to.x, y: to.y }, kind: occ.kind });
+    if (hadPlan) {
+      s.events.push({ type: 'tempo', at: { x: to.x, y: to.y }, kind: occ.kind });
+      // Second Breakfast: a stolen turn earns a second step (a stretch, not a snatch)
+      if (s.breakfast && !wasStretch) s.freeMoves++;
+    }
   }
   p.x = to.x;
   p.y = to.y;
+
+  if (enemies(s).length === 0) {
+    s.status = 'won';
+    return true;
+  }
+  settleFork(s, p, before);
 
   if (enemies(s).length === 0) {
     s.status = 'won';
@@ -156,9 +162,24 @@ export function promote(s: FightState, kind: PromotionKind): boolean {
   s.pendingPromotion = null;
   if (!p) return false;
   p.kind = kind;
-  if (kind === 'hopper' && s.whistle) p.spry = true; // the Acorn Whistle greets them
   settleCornered(s); // fresh threats might complete the net
   return true;
+}
+
+/**
+ * The Forked Twig: a friend that lands where it threatens two or more bramble
+ * creatures at once — at least one it wasn't already eyeing — freezes them all
+ * for the bramble's coming move. The real fork wins one of the two; this one
+ * makes sure neither runs while you decide which.
+ */
+function settleFork(s: FightState, p: Piece, before: Set<number>) {
+  if (!s.fork) return;
+  const hit = threatsFor(s, p)
+    .map((t) => pieceAt(s, t.x, t.y))
+    .filter((q): q is Piece => !!q && q.side === 'bramble');
+  if (hit.length < 2 || !hit.some((q) => !before.has(q.y * 64 + q.x))) return;
+  for (const q of hit) if (q.kind !== 'heart') q.stunned = true;
+  s.events.push({ type: 'forked', at: { x: p.x, y: p.y }, kind: p.kind });
 }
 
 /**
@@ -212,7 +233,7 @@ function announceStuck(s: FightState) {
     s.events.filter((e) => e.type === 'blocked').map((e) => `${e.at.x},${e.at.y}`),
   );
   for (const e of enemies(s)) {
-    if (e.kind === 'heart') continue;
+    if (e.kind === 'heart' || e.stunned || isPinned(s, e)) continue; // held, not walled
     if (already.has(`${e.x},${e.y}`)) continue;
     if (movesFor(s, e).length === 0) {
       s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
@@ -357,7 +378,7 @@ function forcedRescue(s: FightState): Telegraph | null {
   const t: Telegraph = { pieceId: r.piece.id, to: r.to };
   const victim = pieceAt(s, r.to.x, r.to.y);
   if (victim) t.target = victim.id;
-  if (r.piece.veiled) t.veiled = true;
+  if (r.piece.veiled && !s.glow) t.veiled = true;
   return t;
 }
 
@@ -429,6 +450,11 @@ function resolveTelegraphs(s: FightState) {
       continue;
     }
     if (!t.to) continue;
+    if (e.stunned) continue; // forked: frozen, and the marker on it already says so
+    if (isPinned(s, e)) {
+      s.events.push({ type: 'pinned', at: { x: e.x, y: e.y }, kind: e.kind });
+      continue;
+    }
     let to = landingFor(s, e, t.to);
     if (t.alt) {
       // fickle: two committed options — take whichever is better right now
@@ -491,9 +517,9 @@ function land(s: FightState, e: Piece, to: Vec) {
       // teleports across the board with no line connecting the two squares is
       // the single most confusing thing that happens in a fight
       s.events.push({ type: 'cloaked', at: { x: to.x, y: to.y }, kind: occ.kind, to: { ...spot } });
-    } else if (s.wardLeft > 0) {
-      // Bramble Ward: the capture is shrugged off — the friend stands (the Keeper
-      // too), and the attacker recoils rather than completing its move.
+    } else if (occ.kind === 'keeper' && s.wardLeft > 0) {
+      // Bramble Ward: the Keeper shrugs the catch off — stands its ground, and
+      // the attacker recoils rather than completing its move.
       s.wardLeft--;
       s.events.push({ type: 'warded', at: { x: to.x, y: to.y }, kind: occ.kind });
       return;
@@ -642,6 +668,7 @@ function cloakSpot(s: FightState, landing: Vec, p: Piece): Vec | null {
 
 function assignTelegraphs(s: FightState) {
   const es = enemies(s);
+  for (const e of es) if (e.stunned) delete e.stunned; // a fork freezes one move, no more
   s.telegraphs = [];
   if (es.length === 0) return;
   let n = Math.min(s.actsPerTurn, es.length);
@@ -664,7 +691,7 @@ function assignTelegraphs(s: FightState) {
     const tgt = friendTarget(s, r.to);
     if (tgt != null) t.target = tgt;
     if (r.alt) t.alt = r.alt;
-    if (r.e.veiled) t.veiled = true;
+    if (r.e.veiled && !s.glow) t.veiled = true; // the Glowworm Jar lights the shroud
     s.telegraphs.push(t);
   }
   // the Heart holding still is information — keep a null telegraph so the

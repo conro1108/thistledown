@@ -27,12 +27,12 @@ export type Side = 'friend' | 'bramble';
  * companion of that kind, exactly like the Acorn Whistle lifts every Hopper.
  */
 export type UpgradeId =
-  | 'thornstep' // sprout: may advance one step diagonally forward (not just capture)
+  | 'longstride' // sprout: two steps forward from its home row (the real rule)
   | 'rootgrip' // sprout: may also step one square straight back
-  | 'springheel' // hopper: may also step one square diagonally
+  | 'longlegs' // hopper: also leaps a stretched L (three and one)
   | 'sidestep' // slink: may also step one square orthogonally (change colour)
   | 'underbrush' // slink: its diagonal glide slips over the first friendly in the way
-  | 'pivot'; // rumble: may also step one square diagonally
+  | 'cornering'; // rumble: may turn one corner mid-charge
 
 export interface Piece {
   id: number;
@@ -40,8 +40,8 @@ export interface Piece {
   kind: Kind;
   x: number;
   y: number;
-  /** honeycake'd: may also take a plain (non-capturing) one-step move */
-  spry?: boolean;
+  /** forked: frozen for the bramble's next move */
+  stunned?: boolean;
   /** movement upgrades this piece carries (see UpgradeId) */
   upgrades?: UpgradeId[];
   /** commits to two squares and takes whichever is better when it moves */
@@ -100,7 +100,10 @@ export interface FightEvent {
     | 'stir' // the spread clock marks a square — fair warning
     | 'sprouted' // …and a thistle grows there
     | 'smothered' // …unless a friend was standing on it
-    | 'twisted'; // a thistle reached the friends' home row and promoted
+    | 'twisted' // a thistle reached the friends' home row and promoted
+    | 'forked' // the Forked Twig: a friend now threatens two at once — both freeze
+    | 'pinned' // the Thorn Pin held a creature's committed move
+    | 'swapped'; // the Acorn Whistle: the Keeper traded places with a friend
   at: Vec;
   kind: Kind;
   /** where the piece ended up, when the event moved it (the Cloak's drift home) */
@@ -151,12 +154,20 @@ export interface FightState {
   pendingPromotion: number | null;
   /** Dandelion Cloak charges left this fight */
   cloakLeft: number;
-  /** Bramble Ward charges left this fight (negates a capture, Keeper included) */
+  /** Bramble Ward charges left this fight (the Keeper shrugs off a catch) */
   wardLeft: number;
-  /** Second Breakfast: extra player moves banked for this fight */
+  /** Acorn Whistle swaps left this fight (the Keeper trades places with a neighbour) */
+  swapLeft: number;
+  /** Second Breakfast is along: a mid-lunge catch earns a second step */
+  breakfast: boolean;
+  /** extra player moves banked right now (a stretch, not a snatch) */
   freeMoves: number;
-  /** mid-extra-move: the Second Breakfast step is a stretch, not a snatch — no captures */
+  /** mid-extra-move: no captures */
   freeMoveActive: boolean;
-  /** Acorn Whistle is along (mid-fight promotions to hopper come out spry) */
-  whistle: boolean;
+  /** the Forked Twig is along: threatening two at once freezes both */
+  fork: boolean;
+  /** the Thorn Pin is along: see isPinned */
+  pin: boolean;
+  /** the Glowworm Jar is along: shrouded creatures show their arrows */
+  glow: boolean;
 }
