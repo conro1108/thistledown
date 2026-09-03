@@ -30,6 +30,18 @@ export interface FightSpec {
 
 export const REGION_NAMES = ['The Meadow', 'The Thicket', 'The Tanglewood', 'The Deep Bramble', 'The Rotwood', 'The Worldroot'];
 export const FIGHTS_PER_REGION = 4;
+/**
+ * The run proper ends at the Bramble Heart: four regions, sixteen clearings.
+ * The two regions past it are the deep path — offered, never required. A
+ * 24-fight ladder was a marathon almost nobody finished; a 16-fight run with
+ * an optional descent is a win most players can reach and a reason to return.
+ */
+export const SURFACE_REGIONS = 4;
+export const SURFACE_FIGHTS = SURFACE_REGIONS * FIGHTS_PER_REGION;
+export const DEEP_FIGHTS = (REGION_NAMES.length - SURFACE_REGIONS) * FIGHTS_PER_REGION;
+export const isDeep = (fightIndex: number) => fightIndex >= SURFACE_FIGHTS;
+/** The last clearing of every region is its Heart. */
+export const isBossIndex = (fightIndex: number) => fightIndex % FIGHTS_PER_REGION === FIGHTS_PER_REGION - 1;
 
 export function regionOf(fightIndex: number): number {
   return Math.min(REGION_NAMES.length - 1, Math.floor(fightIndex / FIGHTS_PER_REGION));
@@ -285,7 +297,7 @@ const TEMPLATES: FightTemplate[] = [
   {
     name: 'The Bramble Heart',
     intro:
-      'The heart of the Deep Bramble. It cannot be caught — no paw lands on it — and its guards will throw themselves into your net to save it. Cover everything. Leave it nothing. (You will learn it was not the last of them.)',
+      'The heart of the Deep Bramble. It cannot be caught — no paw lands on it — and its guards will throw themselves into your net to save it. Cover everything. Leave it nothing.',
     objective: CORNER_HEART,
     w: 8,
     h: 8,

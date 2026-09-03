@@ -25,8 +25,10 @@ check-in-every-few-hours game, this is a sit-down-for-40-minutes game.
 
 ## Current state
 
-The full run is playable: **6 regions × 4 clearings = 24 fights**, a boss per
-region, camps before bosses, region-shaped recruit pools. Difficulty comes from
+The full run is playable: **4 regions × 4 clearings**, a boss per region,
+camps before bosses, region-shaped recruit pools — and two optional deep
+regions past the Bramble Heart for whoever wants more. A trail map shows the
+path; a journal remembers every creature met across runs. Difficulty comes from
 independent axes rather than just bigger enemy counts — enemy acts-per-turn,
 AI dials (foresight, caution, bloodlust), telegraph degradation (full → fickle
 → shrouded), and an anti-stall spread clock. Progression items: trinkets,

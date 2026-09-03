@@ -1,7 +1,7 @@
 // Run flow: which screen the session's stage calls for, and every card on the
 // path — title, clearing intro, aftermath/recruit, trinket, campfire, promotion.
 import { movesFor } from '../game/board';
-import { REGION_NAMES, regionOf } from '../game/ladder';
+import { DEEP_FIGHTS, isDeep, REGION_NAMES, regionOf, SURFACE_FIGHTS } from '../game/ladder';
 import type { PromotionKind } from '../game/fight';
 import { isSpry, KIND_INFO, ROSTER_CAP, TEMP_LIFESPAN, TRINKETS, UPGRADES } from '../game/run';
 import { movesThisClearing, newSession, retryFight, totalMoves } from '../game/session';
@@ -12,8 +12,9 @@ import { canvas, hintEl, historyBar } from './dom';
 import { cap, listKinds, plural, refreshHud } from './hud';
 import { applyRegionTheme, rainPetals, showChoiceScene, showOverlay, showTitle, type Choice, type SceneOption } from './overlay';
 import { sizeCanvas } from './render';
-import { DEFAULT_HINT, MOVE_TAG, OBJECTIVE, S, TRINKET_ICONS, UPGRADE_ICONS } from './state';
-import { doEntry, loadSave, persist, recordClearing, recordRun } from './storage';
+import { DEFAULT_HINT, FIRST_HINT, MOVE_TAG, OBJECTIVE, S, TRINKET_ICONS, UPGRADE_ICONS } from './state';
+import { coach, doEntry, loadJournal, loadSave, noteFight, noteRunStart, noteRunWon, persist, recordClearing, recordRun } from './storage';
+import { castHere, journalStrip, trailEl } from './trail';
 import { beginEnemyTurn, cancelBeat, drainEvents, proceedAfterPlayerAction, scheduleBeat } from './turn';
 
 // ---------- run flow ----------
@@ -29,7 +30,7 @@ export function title() {
     const friends = saved.run.companions.filter((c) => !c.shaken).length + 1;
     choices.push({
       label: 'Keep going',
-      sub: `Clearing ${saved.run.fightIndex + 1} of ${saved.run.fights.length}, ${friends} of you on the path.`,
+      sub: `Clearing ${saved.run.fightIndex + 1} of ${saved.run.deep ? saved.run.fights.length : SURFACE_FIGHTS}, ${friends} of you on the path.`,
       fn: () => {
         S.sess = saved;
         stageUi();
@@ -39,15 +40,31 @@ export function title() {
   choices.push({
     label: saved ? 'Start fresh' : 'Set out',
     sub: saved ? 'The old path grows over.' : undefined,
-    fn: startRun,
+    fn: () => startRun(),
   });
-  showTitle(choices);
+  choices.push({
+    label: 'Today’s meadow',
+    sub: 'One shared path for everyone, just for today.',
+    fn: () => startRun(dailySeed()),
+  });
+  showTitle(choices, journalStrip(loadJournal()));
+}
+
+/** The same meadow for everyone today — a small hash of the local date. */
+function dailySeed(): number {
+  const d = new Date();
+  const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  let h = 2166136261;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0) % 2147483647;
 }
 
 
 
-function startRun() {
-  S.sess = newSession(Date.now() % 2147483647);
+function startRun(seed = Date.now() % 2147483647) {
+  S.sess = newSession(seed);
+  S.newThisRun = [];
+  noteRunStart();
   persist();
   stageUi();
 }
@@ -85,27 +102,38 @@ export function stageUi() {
     case 'camp':
       campStop();
       break;
+    case 'crossroads':
+      crossroadsUi();
+      break;
     case 'over':
       endOfRunUi();
       break;
   }
 }
 
+/**
+ * The clearing's edge: the trail (where you are, what's ahead), the faces
+ * waiting in this clearing, then the one line of lesson. The map is the
+ * picture; the text is the caption.
+ */
 function fightIntro() {
   if (!S.run) return;
-  const spec = S.run.fights[S.run.fightIndex];
+  const run = S.run;
+  const spec = run.fights[run.fightIndex];
   showOverlay(
-    `${REGION_NAMES[regionOf(S.run.fightIndex)]} · ${spec.name}`,
+    spec.name,
     `${spec.intro}<span class="objective">${iconHTML('daisy')} ${spec.objective ?? OBJECTIVE}</span>`,
     [
       {
         label: 'Onward',
         fn: () => {
+          S.newThisRun.push(...noteFight(run, spec));
           doEntry({ t: 'begin' });
           enterFight(false);
         },
       },
     ],
+    [trailEl(run), castHere(spec, loadJournal())],
   );
 }
 
@@ -130,7 +158,7 @@ function enterFight(resume: boolean) {
   canvas.height = S.fight.h * TILE;
   document.querySelector('#board-wrap')!.classList.remove('idle');
   requestAnimationFrame(sizeCanvas);
-  hintEl.innerHTML = DEFAULT_HINT;
+  hintEl.innerHTML = coach('tap', FIRST_HINT) ?? DEFAULT_HINT;
   refreshHud();
   if (resume && S.sess.stage === 'promotion') {
     promotionChoice();
@@ -160,6 +188,10 @@ export function endOfFightUi() {
   if (!S.sess || !S.run) return;
   if (S.sess.stage === 'over') {
     endOfRunUi();
+    return;
+  }
+  if (S.sess.stage === 'crossroads') {
+    crossroadsUi();
     return;
   }
   // stage 'post': clearing won, maybe a recruit is watching
@@ -228,37 +260,85 @@ export function endOfFightUi() {
 /** Capitalize the first letter — for notes that used to sit mid-sentence. */
 
 
+/** A lost run still leaves something behind: how far, and who you met. */
 function endOfRunUi() {
-  if (!S.run) return;
-  if (S.run.status === 'lost') {
+  if (!S.run || !S.sess) return;
+  const run = S.run;
+  if (run.status === 'lost') {
+    const journal = loadJournal();
+    const i = run.fightIndex;
+    const where = isDeep(i)
+      ? `Clearing ${i - SURFACE_FIGHTS + 1} of ${DEEP_FIGHTS} below the Heart — ${REGION_NAMES[regionOf(i)]}.`
+      : `Clearing ${i + 1} of ${SURFACE_FIGHTS} — ${REGION_NAMES[regionOf(i)]}.`;
+    // deepest-yet: the journal already holds this clearing, so "yet" means no earlier run went further
+    const record = journal.deepest === i && journal.runs > 1 ? ` Your deepest yet! ${iconHTML('trophy')}` : '';
+    const met = S.newThisRun.length
+      ? ` Met for the first time: ${S.newThisRun.map((k) => KIND_INFO[k].title).join(', ')}.`
+      : '';
     showOverlay(
       'The lantern goes out',
-      `The brambles got the Keeper in ${S.fight?.name ?? 'the meadow'}. Everyone walks home for tea.`,
+      `The brambles got the Keeper in ${S.fight?.name ?? 'the meadow'}. Everyone walks home for tea.` +
+        `<span class="scene-note">${where}${record}${met}</span>`,
       [
         {
           label: 'Retry this clearing',
           sub: 'Back to the start of this fight — same friends, same meadow.',
           fn: retryClearing,
         },
-        { label: 'Start over', sub: 'A whole new meadow from the top.', fn: startRun },
+        { label: 'Start over', sub: 'A whole new meadow from the top.', fn: () => startRun() },
       ],
+      [trailEl(run)],
     );
     return;
   }
-  const friends = S.run.companions.filter((c) => !c.shaken).length;
-  const moves = S.sess ? totalMoves(S.sess) : 0;
+  const friends = run.companions.filter((c) => !c.shaken).length;
+  const moves = totalMoves(S.sess);
   const rec = recordRun(moves);
+  noteRunWon(!!run.deep);
   const runNote = rec.improved
     ? ` And in just ${plural(moves, 'move')} — a new record! ${iconHTML('trophy')}`
     : rec.best !== undefined
       ? ` You did it in ${plural(moves, 'move')} (best ${rec.best}).`
       : ` You did it in ${plural(moves, 'move')}.`;
+  const story = run.deep
+    ? 'The Worldheart bursts into a thousand flowers, and light reaches the bottom of the wood for the first time in an age. ' +
+      `Nobody has ever gone this deep. ${run.fightIndex} clearings taken back, and ${friends + 1} of you walking home for tea.`
+    : 'Somewhere behind you, someone puts a kettle on. ' +
+      `${run.fightIndex} clearings taken back, and ${friends + 1} of you walking home for tea.`;
+  showOverlay(`The meadow is quiet ${iconHTML('daisy', 'p2')}`, story + runNote, [
+    { label: 'New run', fn: () => startRun() },
+  ]);
+  rainPetals();
+}
+
+/**
+ * The Bramble Heart just fell. That's the run — unless the player wants the
+ * deep path. Both are a choice, neither is a nag: most people should walk
+ * home with a win here, and the ones who want more know where it is.
+ */
+function crossroadsUi() {
+  if (!S.run) return;
   showOverlay(
-    `The meadow is quiet ${iconHTML('daisy', 'p2')}`,
-    'The Bramble Heart bursts into a thousand flowers. Somewhere behind you, someone puts a kettle on. ' +
-      `You won the whole thing — ${S.run.fights.length} clearings taken back, ` +
-      `and ${friends + 1} of you walking home for tea.${runNote}`,
-    [{ label: 'New run', fn: startRun }],
+    `The Bramble Heart bursts into flowers ${iconHTML('bloom', 'p2')}`,
+    'The meadow is quiet. The path home is right there — and under the Heart’s roots, something colder is still breathing.',
+    [
+      {
+        label: 'Home for tea',
+        sub: 'Call it won. Everyone gets a biscuit.',
+        fn: () => {
+          doEntry({ t: 'home' });
+          stageUi();
+        },
+      },
+      {
+        label: 'Press on into the Rotwood',
+        sub: `${DEEP_FIGHTS} more clearings below the Heart. Three and four move a turn, most of them shrouded. No mercy left.`,
+        fn: () => {
+          doEntry({ t: 'deeper' });
+          stageUi();
+        },
+      },
+    ],
   );
   rainPetals();
 }

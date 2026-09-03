@@ -38,7 +38,14 @@ export const MOVE_TAG: Partial<Record<Kind, string>> = {
 };
 
 export const OBJECTIVE = 'Catch every bramble creature to win the clearing.';
-export const DEFAULT_HINT =
+/**
+ * The resting hint. The full how-to-move sentence is a coach bubble the first
+ * time ever (see turn.ts); after that the box under the board stays quiet —
+ * a paragraph of instructions living permanently under every fight was the
+ * loudest "this is a dev build" tell on the screen.
+ */
+export const DEFAULT_HINT = 'Tap a friend to see where they can go.';
+export const FIRST_HINT =
   'Tap a friend (on the board or below), then tap a glowing square — or just drag them there.';
 export const PAUSE_MS = 340; // beat after your move, before the bramble acts
 export const TWEEN_MS = 190; // how long their slide/leap takes to draw
@@ -48,6 +55,7 @@ export const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
 // draw order, so older decision logs no longer replay faithfully — let them go
 export const SAVE_KEY = 'overgrown.save.v6'; // v6: the spread clock was retuned, so old logs replay differently
 export const SCORES_KEY = 'overgrown.scores.v1';
+export const JOURNAL_KEY = 'overgrown.journal.v1';
 
 export type Phase = 'player' | 'enemy';
 
@@ -90,6 +98,8 @@ export const S = {
   /** Hand-tuned state can't replay from the decision log: save + look-back turn off. */
   devDirty: false,
   revealVeiled: false,
+  /** bramble kinds met for the first time ever during this run (for the recap) */
+  newThisRun: [] as Kind[],
 };
 
 const SAVE_FLASH_MS = 900;

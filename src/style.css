@@ -423,6 +423,85 @@ canvas {
   font-size: var(--t-sm);
 }
 
+/* ---------- the trail: the run drawn as a path ---------- */
+
+.trail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: fit-content;
+  margin: 8px auto 6px;
+}
+.trail-row {
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  text-align: left;
+}
+.trail-row.here .trail-name { color: var(--lantern); font-weight: 700; }
+.trail-row.beyond { opacity: 0.5; }
+.trail-path { display: flex; align-items: center; }
+.trail-path .seg { flex: none; width: 8px; height: 2px; background: var(--edge); }
+.node {
+  flex: none;
+  width: var(--sprite-2);
+  height: var(--sprite-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.node .picon, .node canvas {
+  width: var(--sprite-2);
+  height: var(--sprite-2);
+  image-rendering: pixelated;
+  vertical-align: 0;
+}
+.node .dot { width: 6px; height: 6px; background: var(--edge); }
+.node.dim { opacity: 0.45; }
+/* the Keeper stands on the current clearing, lantern lit */
+.node.here {
+  background: color-mix(in srgb, var(--lantern) 28%, transparent);
+  box-shadow: 0 0 0 var(--edge-w) var(--lantern);
+}
+.node.here canvas { animation: cast-bob 900ms steps(1) infinite; }
+
+/* who's waiting in this clearing */
+.cast-here {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.cast-here .who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--t-xs);
+  color: var(--lantern);
+  font-weight: 700;
+}
+.cast-here canvas {
+  width: var(--sprite-3);
+  height: var(--sprite-3);
+  image-rendering: pixelated;
+}
+
+/* the title's journal: every creature, filled in as it's met */
+.journal { margin-top: 12px; }
+.journal .faces { display: flex; justify-content: center; gap: 6px; }
+.journal canvas {
+  width: var(--sprite-2);
+  height: var(--sprite-2);
+  image-rendering: pixelated;
+}
+
 /* ---------- dev panel ---------- */
 
 .card.dev { text-align: left; max-width: 480px; }

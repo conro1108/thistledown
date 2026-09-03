@@ -1,7 +1,10 @@
 // localStorage: the save (seed + decision log), fewest-moves bests, and the
 // once-ever coach bubbles.
+import type { FightSpec } from '../game/ladder';
+import type { RunState } from '../game/run';
 import { apply, replay, type LogEntry, type Session } from '../game/session';
-import { S, SAVE_KEY, SCORES_KEY } from './state';
+import type { Kind } from '../game/types';
+import { JOURNAL_KEY, S, SAVE_KEY, SCORES_KEY } from './state';
 
 // ---------- session & save ----------
 
@@ -108,7 +111,7 @@ export function recordRun(moves: number): { best?: number; improved: boolean } {
 // ---------- first-run coach: one bubble per concept, once ever ----------
 
 const COACH_KEY = 'overgrown.coach.v1';
-type CoachId = 'select' | 'arrows';
+type CoachId = 'select' | 'arrows' | 'tap';
 let coachSeen: Record<string, boolean> = {};
 try {
   const parsed = JSON.parse(localStorage.getItem(COACH_KEY) ?? '{}');
@@ -133,4 +136,89 @@ export function coach(id: CoachId, text: string): string | null {
     /* fine — they'll meet the bubble again next visit */
   }
   return text;
+}
+
+// ---------- the journal: what the Keeper has seen, across every run ----------
+
+/**
+ * The one thing that survives a lost run. Creatures met, friends fielded, how
+ * deep the path has gone — so a loss on clearing 7 still leaves the player
+ * with something (three new creatures, a deepest-yet) instead of nothing, and
+ * the title screen shows a meadow slowly filling in rather than a blank card.
+ */
+export interface Journal {
+  /** bramble kinds ever faced */
+  met: Kind[];
+  /** friend kinds ever fielded */
+  friends: Kind[];
+  /** furthest clearing ever entered (fight index), or -1 */
+  deepest: number;
+  runs: number;
+  wins: number;
+  /** wins that carried on past the Bramble Heart to the very bottom */
+  deepWins: number;
+}
+
+export function loadJournal(): Journal {
+  const blank: Journal = { met: [], friends: [], deepest: -1, runs: 0, wins: 0, deepWins: 0 };
+  try {
+    const raw = localStorage.getItem(JOURNAL_KEY);
+    const j = raw ? (JSON.parse(raw) as Partial<Journal>) : null;
+    if (j && typeof j === 'object') {
+      const kinds = (v: unknown) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string') : []) as Kind[];
+      const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
+      return {
+        met: kinds(j.met),
+        friends: kinds(j.friends),
+        deepest: num(j.deepest, -1),
+        runs: num(j.runs, 0),
+        wins: num(j.wins, 0),
+        deepWins: num(j.deepWins, 0),
+      };
+    }
+  } catch {
+    /* corrupt or blocked — a fresh journal */
+  }
+  return blank;
+}
+
+function saveJournal(j: Journal) {
+  try {
+    localStorage.setItem(JOURNAL_KEY, JSON.stringify(j));
+  } catch {
+    /* fine — the journal just won't persist */
+  }
+}
+
+export function noteRunStart() {
+  const j = loadJournal();
+  j.runs++;
+  saveJournal(j);
+}
+
+/**
+ * Walking into a clearing: log who's there and how far this is. Returns the
+ * bramble kinds being met for the very first time — the "new creature" moment.
+ */
+export function noteFight(run: RunState, spec: FightSpec): Kind[] {
+  const j = loadJournal();
+  const fresh: Kind[] = [];
+  for (const e of spec.enemies) {
+    if (j.met.includes(e.kind) || fresh.includes(e.kind)) continue;
+    fresh.push(e.kind);
+  }
+  j.met.push(...fresh);
+  for (const k of ['keeper' as Kind, ...run.companions.map((c) => c.kind)]) {
+    if (!j.friends.includes(k)) j.friends.push(k);
+  }
+  j.deepest = Math.max(j.deepest, run.fightIndex);
+  saveJournal(j);
+  return fresh;
+}
+
+export function noteRunWon(deep: boolean) {
+  const j = loadJournal();
+  j.wins++;
+  if (deep) j.deepWins++;
+  saveJournal(j);
 }

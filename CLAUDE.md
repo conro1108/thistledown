@@ -30,7 +30,8 @@ Go straight to the file; don't grep `src/` for a concept.
 | Player move → enemy beat → hints/fx from events | `src/ui/turn.ts` |
 | Tap/drag input, sound button | `src/ui/input.ts` |
 | Canvas sizing, rAF loop | `src/ui/render.ts` |
-| Save/scores/coach in localStorage | `src/ui/storage.ts` |
+| Save/scores/coach/journal in localStorage | `src/ui/storage.ts` |
+| Trail map, clearing cast, title journal strip | `src/ui/trail.ts` |
 | Look-back (replay history) | `src/ui/history.ts` |
 | Dev panel | `src/ui/dev.ts` |
 | Shared mutable UI state (`S.sess`, `S.fight`, `S.phase`…), timing constants | `src/ui/state.ts` |

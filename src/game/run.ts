@@ -45,6 +45,8 @@ export interface RunState {
    */
   upgrades: OwnedUpgrade[];
   status: 'playing' | 'won' | 'lost';
+  /** chose to press on past the Bramble Heart into the deep regions */
+  deep?: boolean;
   /**
    * Dev-only master difficulty knob: one number that scales every clearing's
    * authored bramble smarts instead of hand-tuning dials fight by fight. 1 (or

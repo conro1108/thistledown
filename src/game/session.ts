@@ -26,6 +26,7 @@ import {
   type RunState,
   type TrinketId,
 } from './run';
+import { SURFACE_FIGHTS } from './ladder';
 import type { FightState, Kind, UpgradeId, Vec } from './types';
 
 /**
@@ -46,7 +47,9 @@ export type LogEntry =
   | { t: 'upgrade'; id: UpgradeId }
   | { t: 'heal' }
   | { t: 'snack'; idx: number }
-  | { t: 'rest' };
+  | { t: 'rest' }
+  | { t: 'home' } // at the crossroads past the Bramble Heart: call it a win
+  | { t: 'deeper' }; // …or press on into the deep regions
 
 export type Stage =
   | 'intro' // at the next clearing's edge: expect 'begin'
@@ -55,6 +58,7 @@ export type Stage =
   | 'post' // clearing won: expect 'recruit' | 'skip'
   | 'found' // something in the grass: expect 'trinket'
   | 'camp' // the campfire: expect 'heal' | 'snack' | 'trinket' | 'rest'
+  | 'crossroads' // the Bramble Heart just fell: expect 'home' | 'deeper'
   | 'over'; // run won or lost
 
 export interface Session {
@@ -210,6 +214,18 @@ function step(s: Session, e: LogEntry): boolean {
       leaveCamp(s);
       return true;
     }
+    case 'home': {
+      if (s.stage !== 'crossroads') return false;
+      s.run.status = 'won';
+      s.stage = 'over';
+      return true;
+    }
+    case 'deeper': {
+      if (s.stage !== 'crossroads') return false;
+      s.run.deep = true;
+      enterPost(s);
+      return true;
+    }
   }
 }
 
@@ -255,10 +271,20 @@ function settleIfEnded(s: Session): boolean {
     s.stage = 'over';
     return true;
   }
+  // the Bramble Heart just fell: the run is won unless the player chooses otherwise
+  if (s.run.fightIndex === SURFACE_FIGHTS && !s.run.deep) {
+    s.stage = 'crossroads';
+    return true;
+  }
+  enterPost(s);
+  return true;
+}
+
+/** Clearing won and the path continues: maybe a recruit is watching. */
+function enterPost(s: Session) {
   s.recruitOffers =
     s.run.companions.length < ROSTER_CAP && recruitDue(s.run) ? offerRecruits(s.run) : null;
   s.stage = 'post';
-  return true;
 }
 
 /** After the recruit choice: a find after clearing 1, campfires when due. */

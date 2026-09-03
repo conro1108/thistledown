@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { movesFor, pieceAt } from './board';
-import { FIGHTS_PER_REGION, generateFights, REGION_NAMES, regionOf } from './ladder';
+import { FIGHTS_PER_REGION, generateFights, REGION_NAMES, regionOf, SURFACE_FIGHTS } from './ladder';
 import { afterFightWon, buildFightConfig, newRun } from './run';
 import { apply, newSession, replay, retryFight, type Session } from './session';
 
@@ -102,6 +102,8 @@ function botTurn(s: Session): boolean {
     case 'camp':
       if (s.trinketOffers.length) return apply(s, { t: 'trinket', id: s.trinketOffers[0] });
       return apply(s, { t: 'rest' });
+    case 'crossroads':
+      return apply(s, { t: 'deeper' });
     case 'over':
       return false;
   }
@@ -125,6 +127,30 @@ function snap(s: Session) {
 }
 
 describe('session', () => {
+  it('the Bramble Heart is a crossroads: home wins the run, deeper carries on', () => {
+    const atHeart = () => {
+      const s = newSession(5);
+      s.run.fightIndex = SURFACE_FIGHTS - 1;
+      expect(apply(s, { t: 'begin' })).toBe(true);
+      // the Heart falls
+      s.fight!.pieces = s.fight!.pieces.filter((p) => p.side === 'friend');
+      s.fight!.status = 'won';
+      s.resolveDue = true;
+      expect(apply(s, { t: 'resolve' })).toBe(true);
+      expect(s.stage).toBe('crossroads');
+      return s;
+    };
+    const home = atHeart();
+    expect(apply(home, { t: 'home' })).toBe(true);
+    expect(home.run.status).toBe('won');
+    expect(home.stage).toBe('over');
+    const deeper = atHeart();
+    expect(apply(deeper, { t: 'deeper' })).toBe(true);
+    expect(deeper.run.deep).toBe(true);
+    expect(deeper.run.status).toBe('playing');
+    expect(deeper.stage).toBe('post');
+  });
+
   it('a long bot run replays from its log to the identical state', () => {
     for (const seed of [7, 42, 1234]) {
       const live = newSession(seed);

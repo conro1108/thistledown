@@ -18,9 +18,12 @@ player move → resolve → re-telegraph, win/lose), canvas renderer, input + HU
 **The run** — recruit between fights, Shaken (captured friends sit out one fight),
 run win/lose, promotion (a sprout reaching the far edge evolves for the run).
 
-**The ladder** — **6 regions × 4 clearings = 24 fights** (Meadow → Thicket →
+**The ladder** — **6 regions × 4 clearings** (Meadow → Thicket →
 Tanglewood → Deep Bramble → Rotwood → Worldroot), a boss per region (Heart Sapling,
-Gloom Hollow, Thorned Heart, Bramble Heart, Rotting Heart, Worldheart). Each clearing
+Gloom Hollow, Thorned Heart, Bramble Heart, Rotting Heart, Worldheart). **The run
+is the first 16**: felling the Bramble Heart is a crossroads — home for tea (a
+win) or press on into the two deep regions. 24 straight was a marathon almost
+nobody finished. Each clearing
 is a template: authored `core` enemies (the lesson) + a points `budget` rolled per run
 from a region pool on a dedicated RNG stream, so play choices never shift the ladder.
 Camps before bosses; region-shaped recruit pools; roster cap 6.
@@ -72,6 +75,14 @@ frost, sun vs. crescent), the board grass, and the overlay/card chrome (CSS vars
 set on `<html>` per region). The Meadow glows golden; the Worldroot is a cold
 lightless indigo.
 
+**The trail & the journal** — the clearing intro is a map (`ui/trail.ts`): one
+row per region, cleared clearings bloom, the Keeper stands on the current one,
+campfire and Heart marked; the faces waiting in the clearing sit under it, with
+a `new:` tag for a creature never met. The journal (localStorage, never reset)
+keeps creatures met, deepest clearing, runs and wins — the title shows it as a
+strip of faces filling in, and a lost run ends on a recap (how far, who was new)
+rather than nothing. Daily seed on the title (`Today's meadow`).
+
 ## P2 — Open
 
 - [ ] **Real art pass** — current sprites are placeholders-with-charm.
@@ -80,5 +91,5 @@ lightless indigo.
 
 ## P3 — Later
 
-Events, node-map branching, meta unlocks, bestiary, ascension, daily seed, persistent
+Events, node-map branching, meta unlocks, ascension, persistent
 battle log, Capacitor/native wrapper (not started).

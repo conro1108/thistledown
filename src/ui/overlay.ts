@@ -16,8 +16,10 @@ export interface Choice {
   fn: () => void;
 }
 
-export function showOverlay(title: string, body: string, choices: Choice[]) {
+/** `above` slots built elements (a trail, a cast) between the title and the body. */
+export function showOverlay(title: string, body: string, choices: Choice[], above: HTMLElement[] = []) {
   overlayEl.innerHTML = `<div class="card"><h2>${title}</h2><p>${body}</p><div class="btns"></div></div>`;
+  overlayEl.querySelector('h2')!.after(...above);
   const btns = overlayEl.querySelector('.btns')!;
   for (const c of choices) {
     const b = document.createElement('button');
@@ -178,12 +180,11 @@ function castFace(kind: Kind): HTMLCanvasElement {
  * single rule a stranger needs before their first tap. showOverlay stays the
  * workhorse for every other card.
  */
-export function showTitle(choices: Choice[]) {
+export function showTitle(choices: Choice[], journal: HTMLElement | null) {
   overlayEl.innerHTML = `<div class="card title">
     <h1 class="wordmark">Overgrown</h1>
     <div class="cast"></div>
-    <p class="scene-body">The meadow is overgrown, and the Keeper’s lantern is lit.
-      Lead your friends in and take it back, one clearing at a time.
+    <p class="scene-body">The meadow is overgrown. Lead your friends in and take it back.
       <span class="objective">${iconHTML('daisy')} Every bramble creature shows its next
       move. Catch one by landing on its square.</span></p>
     <div class="btns"></div></div>`;
@@ -194,12 +195,13 @@ export function showTitle(choices: Choice[]) {
   const gap = document.createElement('span');
   gap.className = 'cast-gap';
   cast.append(gap, castFace('thistle'));
+  if (journal) overlayEl.querySelector('.scene-body')!.after(journal);
   const runBest = loadScores().run;
   if (runBest !== undefined) {
     const best = document.createElement('span');
     best.className = 'scene-note';
     best.innerHTML = `${iconHTML('trophy')} Best run: ${plural(runBest, 'move')}`;
-    overlayEl.querySelector('.scene-body')!.append(best);
+    (journal ?? overlayEl.querySelector('.scene-body')!).append(best);
   }
   const btns = overlayEl.querySelector('.btns')!;
   choices.forEach((c, i) => {

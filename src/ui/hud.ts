@@ -1,6 +1,7 @@
 // The hud strip (status line, trinket badges, roster chips) and the critter
 // text helpers the hint line and cards share.
 import { enemies } from '../game/fight';
+import { DEEP_FIGHTS, isDeep, SURFACE_FIGHTS } from '../game/ladder';
 import { activeUpgrades, isSpry, KIND_INFO, TRINKETS, upgradeClearingsLeft, UPGRADES } from '../game/run';
 import type { Kind } from '../game/types';
 import { iconEl, iconHTML, type IconName } from '../render/icons';
@@ -40,7 +41,10 @@ function goalLabel(): string {
 
 export function refreshHud() {
   if (!S.run || !S.fight) return;
-  hudName.textContent = `${S.fight.name} · ${S.run.fightIndex + 1}/${S.run.fights.length}`;
+  const i = S.run.fightIndex;
+  hudName.textContent = isDeep(i)
+    ? `${S.fight.name} · below ${i - SURFACE_FIGHTS + 1}/${DEEP_FIGHTS}`
+    : `${S.fight.name} · ${i + 1}/${SURFACE_FIGHTS}`;
   const goal = goalLabel();
   statusLineEl.innerHTML = goal ? `${phaseLabel()} · ${goal}` : phaseLabel();
   statusEl.className = S.fight.status !== 'playing' ? S.fight.status : S.phase;
