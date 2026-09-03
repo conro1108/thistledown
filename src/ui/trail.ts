@@ -136,8 +136,13 @@ function facesRow(kinds: { kind: Kind; count: number; isNew: boolean }[]): HTMLE
     const who = document.createElement('span');
     who.className = 'who' + (isNew ? ' new' : '');
     who.append(face(kind));
+    if (isNew) {
+      const tag = document.createElement('span');
+      tag.textContent = 'new!';
+      who.append(tag);
+    }
     const name = document.createElement('span');
-    name.textContent = `${isNew ? 'new! ' : ''}${KIND_INFO[kind].title}${count > 1 ? ` ×${count}` : ''}`;
+    name.textContent = `${KIND_INFO[kind].title}${count > 1 ? ` ×${count}` : ''}`;
     who.append(name);
     el.append(who);
   }
