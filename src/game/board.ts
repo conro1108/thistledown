@@ -119,7 +119,8 @@ export function movesFor(s: FightState, p: Piece): Vec[] {
   if (p.kind === 'keeper' && p.side === 'friend' && s.swapLeft > 0 && !s.freeMoveActive) {
     for (const d of ALL8) {
       const occ = pieceAt(s, p.x + d.x, p.y + d.y);
-      if (occ && occ.side === 'friend') out.push({ x: occ.x, y: occ.y });
+      // a Sprout swapped onto the far edge would arrive without blossoming — so it can't
+      if (occ && occ.side === 'friend' && !(occ.kind === 'sprout' && p.y === 0)) out.push({ x: occ.x, y: occ.y });
     }
   }
   // Second Breakfast's extra move is a stretch, not a snatch — no captures
@@ -184,8 +185,7 @@ function squaresFor(s: FightState, p: Piece, threats: boolean): Vec[] {
         out.push({ x: fx, y: fy });
         // Long Stride: from its home row a Sprout may take two steps at once
         // (the real rule, taught by bending nothing). Never a capture.
-        const home = p.side === 'friend' ? s.h - 2 : 1;
-        if (hasUpgrade(p, 'longstride') && p.y === home && inBounds(s, fx, fy + dy) && !pieceAt(s, fx, fy + dy))
+        if (hasUpgrade(p, 'longstride') && p.y === s.h - 2 && inBounds(s, fx, fy + dy) && !pieceAt(s, fx, fy + dy))
           out.push({ x: fx, y: fy + dy });
       }
     }

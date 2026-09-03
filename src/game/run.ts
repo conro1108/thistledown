@@ -157,10 +157,7 @@ export function recruitDue(run: RunState): boolean {
   return (run.fightIndex - 1) % 2 === 0;
 }
 
-/**
- * Distinct recruit offers, drawn from a pool that grows region by region. Two
- * by default; Beginner's Luck adds a third (capped at what the pool can spare).
- */
+/** Two distinct recruit offers, drawn from a pool that grows region by region. */
 export function offerRecruits(run: RunState): Kind[] {
   const r = regionOf(run.fightIndex);
   const pool: Kind[] =
@@ -231,12 +228,12 @@ export const TRINKETS: Record<TrinketId, { title: string; blurb: string; region:
   },
   whistle: {
     title: 'Acorn Whistle',
-    blurb: 'Once each clearing, the Keeper may trade places with a friend standing beside it. A quick duck behind a wall.',
+    blurb: 'Once each clearing, drag the Keeper onto a friend beside it and they trade places. A quick duck behind a wall.',
     region: 1,
   },
   pin: {
     title: 'Thorn Pin',
-    blurb: 'A creature caught in a Slink or Rumble’s lane with something dearer behind it is pinned — it cannot move at all.',
+    blurb: 'A creature caught in a Slink, Rumble or Duchess’s lane with something dearer behind it is pinned — it cannot move at all.',
     region: 1,
   },
   dew: {

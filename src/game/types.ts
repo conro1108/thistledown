@@ -21,10 +21,10 @@ export type Side = 'friend' | 'bramble';
 
 /**
  * Movement upgrades: variant moves grafted onto a real piece. Each is a bend
- * of the base pattern (a Sprout that advances diagonally, a Slink that changes
+ * of the base pattern (a Rumble that turns a corner, a Slink that changes
  * colour) — seeing the piece bent is how players end up understanding the
  * straight version. Run-level and keyed by kind: owning one lifts every
- * companion of that kind, exactly like the Acorn Whistle lifts every Hopper.
+ * companion of that kind.
  */
 export type UpgradeId =
   | 'longstride' // sprout: two steps forward from its home row (the real rule)

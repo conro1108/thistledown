@@ -35,8 +35,7 @@ export function attemptMove(pieceId: number, to: Vec) {
   S.selected = null;
   S.inspect = null;
   // a plain step gets a soft place-click; a capture speaks for itself in drainEvents
-  if (!S.fight.events.some((e) => e.type === 'capture' || e.type === 'forked')) playSfx('move');
-  S.forkNote = null;
+  if (!S.fight.events.some((e) => e.type === 'capture' || e.type === 'forked' || e.type === 'swapped')) playSfx('move');
   drainEvents();
   refreshHud();
   proceedAfterPlayerAction();
@@ -129,8 +128,10 @@ export function beginEnemyTurn() {
   const anyAction = snapTelegraphs.some((t) => t.to);
   const stolen = S.tempoKind ? KIND_INFO[S.tempoKind].title : null;
   S.tempoKind = null;
+  const forkNote = S.forkNote;
+  S.forkNote = null;
   hintEl.innerHTML =
-    S.forkNote ??
+    forkNote ??
     (stolen
       ? `You caught the ${stolen} mid-lunge! ${iconHTML('daisy')}`
       : anyAction
@@ -220,7 +221,6 @@ const NOTE_PRI = {
   sprouted: 2, // a fresh Thistle broke soil
   stir: 1, // the spread clock ticked
   pinned: 4, // a pinned creature's committed move went nowhere — say why
-  forked: 5, // your fork froze two of them
 } as const;
 
 export function drainEvents() {
@@ -266,12 +266,18 @@ export function drainEvents() {
       S.fx.push({ at: ev.at, kind: 'poof', t: 0 });
     } else if (ev.type === 'forked') {
       S.fx.push({ at: ev.at, kind: 'bonk', t: 0 });
-      S.forkNote = `Fork! ${iconHTML('twig')} Your ${KIND_INFO[ev.kind].title} threatens two at once — both freeze on the spot.`;
+      const frozen = S.fight.pieces.filter((p) => p.stunned).length;
+      S.forkNote =
+        frozen >= 2
+          ? `Fork! ${iconHTML('twig')} Your ${KIND_INFO[ev.kind].title} threatens two at once — both freeze on the spot.`
+          : `Fork! ${iconHTML('twig')} Your ${KIND_INFO[ev.kind].title} threatens the Heart and its guard — the guard freezes.`;
     } else if (ev.type === 'pinned') {
       S.fx.push({ at: ev.at, kind: 'bonk', t: 0 });
       note(NOTE_PRI.pinned, `The ${KIND_INFO[ev.kind].title} is pinned ${iconHTML('thorn')} — it can’t move without exposing what’s behind it.`);
     } else if (ev.type === 'swapped') {
-      S.fx.push({ at: ev.at, kind: 'bonk', t: 0 });
+      // the friend slides to the Keeper's old square alongside the Keeper's own tween
+      const friend = S.fight.pieces.find((p) => ev.to && p.x === ev.to.x && p.y === ev.to.y);
+      if (friend && ev.to) S.tweens.push({ id: friend.id, from: ev.at, to: ev.to });
     } else if (ev.type === 'stir') {
       note(NOTE_PRI.stir, 'The soil stirs — the bramble is spreading! Stand on the marked square to smother it.');
     } else if (ev.type === 'sprouted') {

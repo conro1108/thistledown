@@ -50,8 +50,8 @@ export const PAUSE_MS = 340; // beat after your move, before the bramble acts
 export const TWEEN_MS = 190; // how long their slide/leap takes to draw
 export const SAVE_BEAT_MS = 660; // a Ward/Cloak save holds the turn open to be watched
 export const PLAYER_TWEEN_MS = 120; // your own piece sliding into place
-// v5: movement upgrades + expanded, region-gated trinkets shift the run's RNG
-// draw order, so older decision logs no longer replay faithfully — let them go
+// bumped whenever an engine change shifts RNG draw order or offers, so older
+// decision logs no longer replay faithfully — they're discarded, not migrated
 export const SAVE_KEY = 'overgrown.save.v7'; // v7: the powerups were reworked — trinket/upgrade ids and offers changed
 export const SCORES_KEY = 'overgrown.scores.v1';
 export const JOURNAL_KEY = 'overgrown.journal.v1';

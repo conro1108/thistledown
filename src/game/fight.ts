@@ -112,9 +112,11 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
   const before = new Set(threatsFor(s, p).map((t) => t.y * 64 + t.x));
 
   const occ = pieceAt(s, to.x, to.y);
+  let swapped: { piece: Piece; before: Set<number> } | null = null;
   if (occ && occ.side === 'friend') {
     // Acorn Whistle: the Keeper and a friend trade places
     s.swapLeft--;
+    swapped = { piece: occ, before: new Set(threatsFor(s, occ).map((t) => t.y * 64 + t.x)) };
     occ.x = p.x;
     occ.y = p.y;
     s.events.push({ type: 'swapped', at: { x: to.x, y: to.y }, kind: occ.kind, to: { x: occ.x, y: occ.y } });
@@ -138,6 +140,7 @@ export function playerMove(s: FightState, pieceId: number, to: Vec): boolean {
     return true;
   }
   settleFork(s, p, before);
+  if (swapped) settleFork(s, swapped.piece, swapped.before); // the friend landed somewhere new too
 
   if (enemies(s).length === 0) {
     s.status = 'won';
@@ -162,6 +165,7 @@ export function promote(s: FightState, kind: PromotionKind): boolean {
   s.pendingPromotion = null;
   if (!p) return false;
   p.kind = kind;
+  settleFork(s, p, new Set()); // a blossom's every threat is new
   settleCornered(s); // fresh threats might complete the net
   return true;
 }
@@ -178,6 +182,8 @@ function settleFork(s: FightState, p: Piece, before: Set<number>) {
     .map((t) => pieceAt(s, t.x, t.y))
     .filter((q): q is Piece => !!q && q.side === 'bramble');
   if (hit.length < 2 || !hit.some((q) => !before.has(q.y * 64 + q.x))) return;
+  // the Heart counts as a prong (check plus attack is the classic fork) but it
+  // is never frozen — it plays by its own rule and has to answer the check
   for (const q of hit) if (q.kind !== 'heart') q.stunned = true;
   s.events.push({ type: 'forked', at: { x: p.x, y: p.y }, kind: p.kind });
 }
@@ -233,7 +239,7 @@ function announceStuck(s: FightState) {
     s.events.filter((e) => e.type === 'blocked').map((e) => `${e.at.x},${e.at.y}`),
   );
   for (const e of enemies(s)) {
-    if (e.kind === 'heart' || e.stunned || isPinned(s, e)) continue; // held, not walled
+    if (e.kind === 'heart' || isPinned(s, e)) continue; // held, not walled (stuns are already lifted here)
     if (already.has(`${e.x},${e.y}`)) continue;
     if (movesFor(s, e).length === 0) {
       s.events.push({ type: 'blocked', at: { x: e.x, y: e.y }, kind: e.kind });
@@ -338,7 +344,7 @@ export function heartCornered(s: FightState): boolean {
  * square it could step to is too. The one situation where the bramble has to
  * answer with somebody else's body.
  */
-function heartPinned(s: FightState): boolean {
+function heartTrapped(s: FightState): boolean {
   const h = s.pieces.find((p) => p.kind === 'heart');
   if (!h) return false;
   const cover = friendCover(s);
@@ -372,7 +378,7 @@ function bestRescue(s: FightState, skip?: Set<number>): { piece: Piece; to: Vec 
  * force the whole side — that's what makes the mating net a real hunt.
  */
 function forcedRescue(s: FightState): Telegraph | null {
-  if (!heartPinned(s)) return null;
+  if (!heartTrapped(s)) return null;
   const r = bestRescue(s);
   if (!r) return null;
   const t: Telegraph = { pieceId: r.piece.id, to: r.to };

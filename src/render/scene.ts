@@ -64,6 +64,9 @@ export function draw(ctx: CanvasRenderingContext2D, s: FightState, v: View, time
   for (const t of telegraphs) {
     const e = s.pieces.find((p) => p.id === t.pieceId);
     if (!e) continue;
+    // a forked or pinned creature isn't going anywhere: the twig/thorn on it
+    // is the whole story, and an arrow next to it would be a broken promise
+    if (e.stunned || isPinned(s, e)) continue;
     if (t.veiled && !v.revealVeiled) {
       // shrouded: it HAS committed — the player just doesn't get the arrow
       questionGlyph(ctx, e.x, e.y);

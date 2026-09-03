@@ -57,14 +57,16 @@ canvas.addEventListener('pointerdown', (ev) => {
   const c = cellFromEvent(ev);
   if (!c) return;
 
+  const p = pieceAt(S.fight, c.x, c.y);
   // second tap of a tap-tap move: go on pointerdown, not on click — the wait
-  // for the up-event is a good chunk of what read as sluggish
-  if (S.selected != null && legalTarget(S.selected, c)) {
+  // for the up-event is a good chunk of what read as sluggish. A tap on a
+  // friend always just picks that friend up: the Whistle's swap (Keeper onto a
+  // neighbour) is a drag, so it can never be spent by changing your mind.
+  if (S.selected != null && p?.side !== 'friend' && legalTarget(S.selected, c)) {
     attemptMove(S.selected, c);
     return;
   }
 
-  const p = pieceAt(S.fight, c.x, c.y);
   S.inspect = c;
   if (p) {
     S.selected = p.side === 'friend' ? p.id : null;
