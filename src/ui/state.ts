@@ -98,8 +98,6 @@ export const S = {
   /** Hand-tuned state can't replay from the decision log: save + look-back turn off. */
   devDirty: false,
   revealVeiled: false,
-  /** bramble kinds met for the first time ever during this run (for the recap) */
-  newThisRun: [] as Kind[],
 };
 
 const SAVE_FLASH_MS = 900;

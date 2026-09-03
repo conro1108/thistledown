@@ -148,7 +148,8 @@ describe('session', () => {
     expect(apply(deeper, { t: 'deeper' })).toBe(true);
     expect(deeper.run.deep).toBe(true);
     expect(deeper.run.status).toBe('playing');
-    expect(deeper.stage).toBe('post');
+    expect(deeper.stage).toBe('camp'); // a breather before the descent, never a stale "clearing won"
+
   });
 
   it('a long bot run replays from its log to the identical state', () => {

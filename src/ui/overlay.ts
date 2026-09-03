@@ -13,6 +13,8 @@ import { loadScores } from './storage';
 export interface Choice {
   label: string;
   sub?: string;
+  /** the lit path onward — one per card at most */
+  primary?: boolean;
   fn: () => void;
 }
 
@@ -23,6 +25,7 @@ export function showOverlay(title: string, body: string, choices: Choice[], abov
   const btns = overlayEl.querySelector('.btns')!;
   for (const c of choices) {
     const b = document.createElement('button');
+    if (c.primary) b.className = 'primary';
     b.innerHTML = c.sub ? `${c.label}<small>${c.sub}</small>` : c.label;
     b.onclick = () => {
       overlayEl.classList.add('hidden');

@@ -434,7 +434,7 @@ canvas {
 }
 .trail-row {
   display: grid;
-  grid-template-columns: 108px 1fr;
+  grid-template-columns: 84px 1fr; /* "Deep Bramble" at 11px; 84 + 8 + 152 fits a 320px phone */
   align-items: center;
   gap: 8px;
   min-height: 28px;
@@ -468,6 +468,8 @@ canvas {
   box-shadow: 0 0 0 var(--edge-w) var(--lantern);
 }
 .node.here canvas { animation: cast-bob 900ms steps(1) infinite; }
+/* the lantern has gone out: nobody bobs on the loss card */
+.trail.still .node.here canvas { animation: none; }
 
 /* who's waiting in this clearing */
 .cast-here {
@@ -482,15 +484,20 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   font-size: var(--t-xs);
-  color: var(--lantern);
-  font-weight: 700;
+  color: var(--ink-soft);
 }
 .cast-here canvas {
   width: var(--sprite-3);
   height: var(--sprite-3);
   image-rendering: pixelated;
+}
+/* a creature never met before wears the lantern */
+.cast-here .who.new { color: var(--lantern); font-weight: 700; }
+.cast-here .who.new canvas {
+  box-shadow: 0 0 0 var(--edge-w) var(--lantern);
+  background: color-mix(in srgb, var(--lantern) 28%, transparent);
 }
 
 /* the title's journal: every creature, filled in as it's met */
@@ -501,6 +508,7 @@ canvas {
   height: var(--sprite-2);
   image-rendering: pixelated;
 }
+.journal canvas.tap { cursor: pointer; }
 
 /* ---------- dev panel ---------- */
 

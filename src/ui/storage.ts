@@ -50,6 +50,8 @@ export function loadSave(): Session | null {
 interface Scores {
   clearings: Record<string, number>;
   run?: number;
+  /** fewest moves for a run that went all the way to the bottom */
+  deep?: number;
 }
 
 export function loadScores(): Scores {
@@ -63,7 +65,11 @@ export function loadScores(): Scores {
       const clearings = Object.fromEntries(
         Object.entries(s.clearings ?? {}).filter(([, v]) => typeof v === 'number'),
       );
-      return { clearings, run: typeof s.run === 'number' ? s.run : undefined };
+      return {
+        clearings,
+        run: typeof s.run === 'number' ? s.run : undefined,
+        deep: typeof s.deep === 'number' ? s.deep : undefined,
+      };
     }
   } catch {
     /* corrupt or blocked — start the board fresh */
@@ -96,13 +102,14 @@ export function recordClearing(name: string, moves: number): { best?: number; im
   return { best: improved ? moves : prev, improved };
 }
 
-export function recordRun(moves: number): { best?: number; improved: boolean } {
+export function recordRun(moves: number, deep: boolean): { best?: number; improved: boolean } {
   const scores = loadScores();
-  const prev = scores.run;
+  const key = deep ? 'deep' : 'run';
+  const prev = scores[key];
   if (S.devDirty) return { best: prev, improved: false };
   const improved = prev === undefined || moves < prev;
   if (improved) {
-    scores.run = moves;
+    scores[key] = moves;
     saveScores(scores);
   }
   return { best: improved ? moves : prev, improved };
@@ -145,14 +152,19 @@ export function coach(id: CoachId, text: string): string | null {
  * deep the path has gone — so a loss on clearing 7 still leaves the player
  * with something (three new creatures, a deepest-yet) instead of nothing, and
  * the title screen shows a meadow slowly filling in rather than a blank card.
+ *
+ * Firsts are stamped with the run they happened on (`runs` at the time), so
+ * "met this run" and "deepest yet" survive a reload and never re-fire on a
+ * retry of the same clearing.
  */
 export interface Journal {
-  /** bramble kinds ever faced */
-  met: Kind[];
+  /** bramble kind → the run it was first met on */
+  metOn: Partial<Record<Kind, number>>;
   /** friend kinds ever fielded */
   friends: Kind[];
-  /** furthest clearing ever entered (fight index), or -1 */
+  /** furthest clearing ever entered (fight index), or -1, and the run that set it */
   deepest: number;
+  deepestOn: number;
   runs: number;
   wins: number;
   /** wins that carried on past the Bramble Heart to the very bottom */
@@ -160,17 +172,20 @@ export interface Journal {
 }
 
 export function loadJournal(): Journal {
-  const blank: Journal = { met: [], friends: [], deepest: -1, runs: 0, wins: 0, deepWins: 0 };
+  const blank: Journal = { metOn: {}, friends: [], deepest: -1, deepestOn: 0, runs: 0, wins: 0, deepWins: 0 };
   try {
     const raw = localStorage.getItem(JOURNAL_KEY);
     const j = raw ? (JSON.parse(raw) as Partial<Journal>) : null;
     if (j && typeof j === 'object') {
-      const kinds = (v: unknown) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string') : []) as Kind[];
       const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
+      const metOn: Journal['metOn'] = {};
+      if (j.metOn && typeof j.metOn === 'object')
+        for (const [k, v] of Object.entries(j.metOn)) if (typeof v === 'number') metOn[k as Kind] = v;
       return {
-        met: kinds(j.met),
-        friends: kinds(j.friends),
+        metOn,
+        friends: (Array.isArray(j.friends) ? j.friends.filter((k) => typeof k === 'string') : []) as Kind[],
         deepest: num(j.deepest, -1),
+        deepestOn: num(j.deepestOn, 0),
         runs: num(j.runs, 0),
         wins: num(j.wins, 0),
         deepWins: num(j.deepWins, 0),
@@ -190,33 +205,37 @@ function saveJournal(j: Journal) {
   }
 }
 
+export const met = (j: Journal, kind: Kind) => j.metOn[kind] !== undefined;
+/** Creatures first met on the run in progress (the latest one). */
+export const metThisRun = (j: Journal): Kind[] =>
+  (Object.keys(j.metOn) as Kind[]).filter((k) => j.metOn[k] === j.runs);
+export const deepestIsThisRun = (j: Journal) => j.deepest >= 0 && j.deepestOn === j.runs && j.runs > 1;
+
+/** A run counts once it's actually walked into its first clearing. */
 export function noteRunStart() {
+  if (S.devDirty) return;
   const j = loadJournal();
   j.runs++;
   saveJournal(j);
 }
 
-/**
- * Walking into a clearing: log who's there and how far this is. Returns the
- * bramble kinds being met for the very first time — the "new creature" moment.
- */
-export function noteFight(run: RunState, spec: FightSpec): Kind[] {
+/** Walking into a clearing: log who's there and how far this is. */
+export function noteFight(run: RunState, spec: FightSpec) {
+  if (S.devDirty) return; // a hand-jumped run isn't a memory
   const j = loadJournal();
-  const fresh: Kind[] = [];
-  for (const e of spec.enemies) {
-    if (j.met.includes(e.kind) || fresh.includes(e.kind)) continue;
-    fresh.push(e.kind);
-  }
-  j.met.push(...fresh);
+  for (const e of spec.enemies) if (!met(j, e.kind)) j.metOn[e.kind] = j.runs;
   for (const k of ['keeper' as Kind, ...run.companions.map((c) => c.kind)]) {
     if (!j.friends.includes(k)) j.friends.push(k);
   }
-  j.deepest = Math.max(j.deepest, run.fightIndex);
+  if (run.fightIndex > j.deepest) {
+    j.deepest = run.fightIndex;
+    j.deepestOn = j.runs;
+  }
   saveJournal(j);
-  return fresh;
 }
 
 export function noteRunWon(deep: boolean) {
+  if (S.devDirty) return;
   const j = loadJournal();
   j.wins++;
   if (deep) j.deepWins++;

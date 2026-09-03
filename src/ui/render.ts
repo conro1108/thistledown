@@ -1,5 +1,5 @@
 // Canvas sizing (integer scale, backdrop horizon) and the rAF draw loop.
-import { regionOf } from '../game/ladder';
+import { themeRegion } from '../game/ladder';
 import type { Vec } from '../game/types';
 import { drawBackdrop } from '../render/backdrop';
 import { draw, FX_LIFE, TILE, type PosOverrides } from '../render/scene';
@@ -90,7 +90,7 @@ export function frame(time: number) {
 }
 
 function renderFrame(time: number) {
-  const theme = themeFor(S.run ? regionOf(S.run.fightIndex) : 0);
+  const theme = themeFor(S.run ? themeRegion(S.run.fightIndex, S.run.deep) : 0);
   const ground: [string, string] = [theme.boardA, theme.boardB];
   drawBackdrop(backdropCtx, backdropEl.width, backdropEl.height, bgFloorY, time, theme, bgSkyTop);
   if (S.history) {

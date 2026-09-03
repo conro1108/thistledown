@@ -48,6 +48,15 @@ export function regionOf(fightIndex: number): number {
 }
 
 /**
+ * Which region's palette to show. At the crossroads the index has already
+ * ticked past the Heart, but the player hasn't chosen the deep path — so the
+ * meadow shouldn't rot around them before they do.
+ */
+export function themeRegion(fightIndex: number, deep: boolean | undefined): number {
+  return deep ? regionOf(fightIndex) : Math.min(regionOf(fightIndex), SURFACE_REGIONS - 1);
+}
+
+/**
  * A fight template: the authored part (the lesson — board, tempo, dials, and
  * the `core` enemies that ARE the lesson) plus a points `budget` of extra
  * bramble rolled fresh per run from `pool`. Costs are piece values, so the

@@ -223,7 +223,9 @@ function step(s: Session, e: LogEntry): boolean {
     case 'deeper': {
       if (s.stage !== 'crossroads') return false;
       s.run.deep = true;
-      enterPost(s);
+      // a breather before the descent: whoever was shaken cornering the Heart
+      // can be fed, and the wilds offer one more thing for the road
+      enterCamp(s);
       return true;
     }
   }
@@ -298,11 +300,16 @@ function leavePost(s: Session) {
     }
   }
   if (campDue(s.run)) {
-    // Wanderer's Map lays out two wild comforts to choose between instead of one.
-    s.trinketOffers = offerTrinkets(s.run, s.run.trinkets.includes('map') ? 2 : 1);
-    s.upgradeOffers = offerUpgrades(s.run, 1);
-    s.stage = 'camp';
+    enterCamp(s);
     return;
   }
   s.stage = 'intro';
+}
+
+/** Sit at the fire: roll what the wilds offer, then wait on one comfort. */
+function enterCamp(s: Session) {
+  // Wanderer's Map lays out two wild comforts to choose between instead of one.
+  s.trinketOffers = offerTrinkets(s.run, s.run.trinkets.includes('map') ? 2 : 1);
+  s.upgradeOffers = offerUpgrades(s.run, 1);
+  s.stage = 'camp';
 }
