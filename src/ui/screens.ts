@@ -9,13 +9,12 @@ import { iconHTML, type IconName } from '../render/icons';
 import { TILE } from '../render/scene';
 import { themeFor } from '../render/themes';
 import { canvas, hintEl, historyBar } from './dom';
-import { cap, listKinds, plural, refreshHud } from './hud';
+import { cap, listKinds, plural, refreshHud, restingHint } from './hud';
 import { applyRegionTheme, rainPetals, showChoiceScene, showOverlay, showTitle, type Choice, type SceneOption } from './overlay';
 import { sizeCanvas } from './render';
-import { DEFAULT_HINT, FIRST_HINT, MOVE_TAG, OBJECTIVE, S, TRINKET_ICONS, UPGRADE_ICONS } from './state';
+import { MOVE_TAG, OBJECTIVE, S, TRINKET_ICONS, UPGRADE_ICONS } from './state';
 import type { Kind } from '../game/types';
 import {
-  coach,
   deepestIsThisRun,
   doEntry,
   loadJournal,
@@ -182,7 +181,7 @@ function enterFight(resume: boolean) {
   canvas.height = S.fight.h * TILE;
   document.querySelector('#board-wrap')!.classList.remove('idle');
   requestAnimationFrame(sizeCanvas);
-  hintEl.innerHTML = coach('tap', FIRST_HINT) ?? DEFAULT_HINT;
+  hintEl.innerHTML = restingHint();
   refreshHud();
   if (resume && S.sess.stage === 'promotion') {
     promotionChoice();
@@ -296,7 +295,8 @@ function endOfRunUi() {
     const i = run.fightIndex;
     const record = deepestIsThisRun(journal) && journal.deepest === i;
     const fresh = metThisRun(journal);
-    const where = `${whereLabel(i)} — ${REGION_NAMES[regionOf(i)]}.`;
+    const daily = run.seed === dailySeed() ? 'Today’s meadow · ' : '';
+    const where = `${daily}${whereLabel(i)} — ${REGION_NAMES[regionOf(i)]}.`;
     const above = [trailEl(run, { still: true })];
     if (fresh.length) above.push(metRow(fresh));
     showOverlay(

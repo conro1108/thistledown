@@ -2,8 +2,8 @@
 import { replay } from '../game/session';
 import type { FightState } from '../game/types';
 import { hintEl, histLabel, histLive, histNext, histPrev, historyBar, historyBtn } from './dom';
-import { refreshHud } from './hud';
-import { DEFAULT_HINT, S } from './state';
+import { refreshHud, restingHint } from './hud';
+import { S } from './state';
 
 // ---------- history: step back through the clearing ----------
 
@@ -61,7 +61,7 @@ function exitHistory() {
   if (!S.history) return;
   S.history = null;
   historyBar.classList.add('hidden');
-  hintEl.innerHTML = DEFAULT_HINT;
+  hintEl.innerHTML = restingHint();
   refreshHud();
 }
 

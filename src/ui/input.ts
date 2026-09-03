@@ -5,8 +5,8 @@ import { iconHTML } from '../render/icons';
 import { TILE } from '../render/scene';
 import { playSfx, toggleMute, unlockAudio } from '../audio';
 import { canvas, hintEl, soundBtn } from './dom';
-import { refreshHud, tapHint } from './hud';
-import { DEFAULT_HINT, S } from './state';
+import { refreshHud, restingHint, tapHint } from './hud';
+import { S } from './state';
 import { attemptMove, pendingBeat, skipEnemyBeat } from './turn';
 
 soundBtn.onclick = () => {
@@ -78,7 +78,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   } else {
     S.selected = null;
     S.inspect = null;
-    hintEl.innerHTML = DEFAULT_HINT;
+    hintEl.innerHTML = restingHint();
   }
   refreshHud();
 });

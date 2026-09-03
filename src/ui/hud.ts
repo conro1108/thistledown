@@ -8,11 +8,24 @@ import { iconEl, iconHTML, type IconName } from '../render/icons';
 import { drawSprite } from '../render/sprites';
 import { devBtn, historyBtn, hudName, rosterEl, statusEl, statusLineEl, trinketsEl } from './dom';
 import { showOverlay } from './overlay';
-import { S, saveFlashing, TRINKET_ICONS, UPGRADE_ICONS } from './state';
-import { coach } from './storage';
+import { DEFAULT_HINT, FIRST_HINT, S, saveFlashing, TRINKET_ICONS, UPGRADE_ICONS } from './state';
+import { coach, loadJournal } from './storage';
 import { selectPiece } from './turn';
 
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * What the line under the board says when nothing else needs it. State first:
+ * a marked square about to sprout is the one thing worth a standing warning
+ * (the stir note itself is gone on the next tap). The full how-to-move
+ * sentence stays up through a player's first clearing ever; after that the
+ * short reminder of the tap-to-inspect affordance.
+ */
+export function restingHint(): string {
+  if (S.fight?.pendingSprout && S.fight.status === 'playing')
+    return `The soil stirs at the marked square — stand on it before something grows. ${iconHTML('sprout')}`;
+  return loadJournal().deepest < 1 ? FIRST_HINT : DEFAULT_HINT;
+}
 
 /** Capitalize the first letter — for notes that used to sit mid-sentence. */
 export function cap(s: string): string {

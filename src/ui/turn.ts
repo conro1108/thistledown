@@ -5,9 +5,9 @@ import type { Vec } from '../game/types';
 import { iconHTML } from '../render/icons';
 import { playSfx, soundForEvent, type SoundName } from '../audio';
 import { hintEl } from './dom';
-import { refreshHud, tapHint } from './hud';
+import { refreshHud, restingHint, tapHint } from './hud';
 import { endOfFightUi, maybeAutoWait, promotionChoice } from './screens';
-import { DEFAULT_HINT, PAUSE_MS, PLAYER_TWEEN_MS, S, SAVE_BEAT_MS, TWEEN_MS } from './state';
+import { PAUSE_MS, PLAYER_TWEEN_MS, S, SAVE_BEAT_MS, TWEEN_MS } from './state';
 import { coach, doEntry } from './storage';
 
 // ---------- selection & movement ----------
@@ -185,7 +185,7 @@ export function beginEnemyTurn() {
                 'arrows',
                 'Every arrow is a promise: that creature moves exactly there next turn. Step clear, block the path — or catch it first!',
               )) ??
-          DEFAULT_HINT;
+          restingHint();
       refreshHud();
       if (S.fight!.status !== 'playing') {
         playOutcome();

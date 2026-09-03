@@ -39,10 +39,10 @@ export const MOVE_TAG: Partial<Record<Kind, string>> = {
 
 export const OBJECTIVE = 'Catch every bramble creature to win the clearing.';
 /**
- * The resting hint. The full how-to-move sentence is a coach bubble the first
- * time ever (see turn.ts); after that the box under the board stays quiet —
- * a paragraph of instructions living permanently under every fight was the
- * loudest "this is a dev build" tell on the screen.
+ * The resting hints (see restingHint in hud.ts). The full how-to-move sentence
+ * only lives under the board through a player's first clearing ever — a
+ * paragraph of instructions under every fight forever was the loudest "this is
+ * a dev build" tell on the screen.
  */
 export const DEFAULT_HINT = 'Tap a friend to see where they can go.';
 export const FIRST_HINT =

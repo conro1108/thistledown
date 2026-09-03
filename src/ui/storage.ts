@@ -118,7 +118,7 @@ export function recordRun(moves: number, deep: boolean): { best?: number; improv
 // ---------- first-run coach: one bubble per concept, once ever ----------
 
 const COACH_KEY = 'overgrown.coach.v1';
-type CoachId = 'select' | 'arrows' | 'tap';
+type CoachId = 'select' | 'arrows';
 let coachSeen: Record<string, boolean> = {};
 try {
   const parsed = JSON.parse(localStorage.getItem(COACH_KEY) ?? '{}');
