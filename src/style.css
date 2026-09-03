@@ -130,9 +130,19 @@ button, input, textarea, select { font-family: inherit; }
   border-bottom: var(--edge-w) solid var(--edge);
 }
 
-#fightname { font-weight: bold; color: var(--lantern); font-size: var(--t-md); }
+#fightname {
+  font-weight: bold;
+  color: var(--lantern);
+  font-size: var(--t-md);
+  /* a full row of badges must never fold the name into three lines — the
+     header's height would shove the board through the integer-rescale loop */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-#hud-right { display: flex; align-items: center; gap: 6px; }
+#hud-right { display: flex; align-items: center; gap: 6px; flex: none; }
 
 .hidden { display: none !important; }
 
